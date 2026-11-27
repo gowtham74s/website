@@ -4,6 +4,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { SUPABASE_KEY, SUPABASE_URL } from "@/lib/supabase";
 import { addDays, dateKey, dayScore, expandEvents, isTrainingDay, readiness, rollingAverage, sumMacros, trendPerWeek, walkDistance } from "@/lib/calc";
 import type { ActivityLog, BodyMeasurement, CalendarEvent, Habit, HabitLog, HydrationLog, Meal, NutritionLog, PlanExercise, Profile, Program, RecoveryLog, SleepLog, Workout, WorkoutPlan, WorkoutSet } from "@/lib/types";
 
@@ -111,7 +112,7 @@ async function snapshot(db: any, tzOffsetMin: number, clientToday: string) {
 export async function POST(req: Request) {
   const auth = req.headers.get("authorization");
   if (!auth?.startsWith("Bearer ")) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-  const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
+  const db = createClient(SUPABASE_URL, SUPABASE_KEY, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
   const { data: u, error: ue } = await db.auth.getUser(auth.slice(7));
   if (ue || !u.user) return NextResponse.json({ error: "Session expired — sign in again" }, { status: 401 });
 
