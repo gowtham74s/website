@@ -24,8 +24,15 @@ export default function Login() {
       : mode === "signup" ? await supabase.auth.signUp({ email, password, options: { data: { name }, emailRedirectTo: redirect } })
       : await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirect } });
     setBusy(false);
-    if (res.error) return setMsg({ tone: "bad", text: res.error.message });
+    if (res.error) {
+      const m = res.error.message;
+      if (/rate limit/i.test(m)) return setMsg({ tone: "bad", text: mode === "magic" ? "Too many emails sent recently. Use the Sign in tab with your password instead, or try the email link again in about an hour." : "Too many emails sent recently. If you already have an account, use Sign in with your password; otherwise try again in about an hour." });
+      if (/invalid login credentials/i.test(m)) return setMsg({ tone: "bad", text: "Email or password is incorrect. If you only ever used an email link, set a password via Sign up with the same email or use Email link." });
+      if (/email not confirmed/i.test(m)) return setMsg({ tone: "bad", text: "Please confirm your email first — check your inbox for the confirmation link." });
+      return setMsg({ tone: "bad", text: m });
+    }
     if (mode === "magic") setMsg({ tone: "good", text: "Check your inbox for a sign-in link." });
+    else if (mode === "signup" && res.data.user && !res.data.user.identities?.length) setMsg({ tone: "bad", text: "An account with this email already exists. Use Sign in with your password." });
     else if (mode === "signup" && !res.data.session) setMsg({ tone: "good", text: "Account created. Confirm your email, then sign in." });
   };
 
@@ -54,6 +61,7 @@ export default function Login() {
             <Field label="Email"><div className="relative"><Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" /><Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="pl-9" autoComplete="email" /></div></Field>
             {mode !== "magic" && <Field label="Password"><div className="relative"><Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" /><Input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} className="pl-9" autoComplete={mode === "signup" ? "new-password" : "current-password"} /></div></Field>}
           </div>
+          {mode === "magic" && <p className="mt-3 text-xs text-faint">Email links are limited to a few per hour. Signing in with a password never sends email.</p>}
           {msg && <p className={`mt-4 rounded-xl px-3 py-2 text-sm ${msg.tone === "good" ? "bg-good-soft text-good" : "bg-bad-soft text-bad"}`}>{msg.text}</p>}
           <Button type="submit" variant="good" size="lg" className="mt-6 w-full" loading={busy}>{mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send link"}<ArrowRight className="size-4" /></Button>
         </form>
