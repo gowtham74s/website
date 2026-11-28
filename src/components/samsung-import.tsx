@@ -26,7 +26,7 @@ async function readFiles(list: FileList) {
 function inRange(d: SamsungData, days: number | null): SamsungData {
   if (!days) return d;
   const from = addDays(dateKey(), -(days - 1));
-  return { ...d, steps: d.steps.filter((x) => x.date >= from), exercises: d.exercises.filter((x) => x.date >= from), sleep: d.sleep.filter((x) => x.date >= from), weight: d.weight.filter((x) => x.date >= from) };
+  return { ...d, steps: d.steps.filter((x) => x.date >= from), exercises: d.exercises.filter((x) => x.date >= from), sleep: d.sleep.filter((x) => x.date >= from), weight: d.weight.filter((x) => x.date >= from), water: d.water.filter((x) => x.date >= from) };
 }
 
 export function SamsungImportCard({ compact }: { compact?: boolean }) {
@@ -75,7 +75,7 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
 
       // Daily steps & distance — replace earlier Samsung rows for the same days (re-import safe).
       for (const c of chunk(dates(data.steps))) await run(supabase.from("activity_logs").delete().eq("source", "samsung").in("date", c));
-      for (const c of chunk(data.steps.map((s) => ({ user_id, date: s.date, type: "walk", steps: s.steps, distance_km: s.distance_km, duration_min: 0, active_calories: s.calories, source: "samsung", notes: "Samsung Health daily steps", logged_at: new Date(`${s.date}T23:59:00`).toISOString() }))))
+      for (const c of chunk(data.steps.map((s) => ({ user_id, date: s.date, type: "walk", steps: s.steps, distance_km: s.distance_km, duration_min: s.active_min, active_calories: s.calories, resting_calories: s.resting_calories, source: "samsung", notes: "Samsung Health daily steps", logged_at: new Date(`${s.date}T23:59:00`).toISOString() }))))
         await run(supabase.from("activity_logs").insert(c));
 
       // Workouts — replaced the same way.
@@ -84,7 +84,16 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
         await run(supabase.from("activity_logs").insert(c));
 
       // Sleep & weight — only fill days you haven't logged yet (never overwrite your own entries).
-      let sleepAdded = 0, weightAdded = 0;
+      let sleepAdded = 0, weightAdded = 0, waterAdded = 0;
+      // Water — skip glasses already imported (matched by timestamp to the second).
+      if (data.water.length) {
+        const { data: ex, error } = await supabase.from("hydration_logs").select("logged_at").gte("date", data.water[0].date);
+        if (error) throw error;
+        const have = new Set((ex || []).map((r) => new Date(r.logged_at).toISOString().slice(0, 19)));
+        const rows = data.water.filter((w) => !have.has(w.logged_at.slice(0, 19))).map((w) => ({ user_id, ...w }));
+        for (const c of chunk(rows)) await run(supabase.from("hydration_logs").insert(c));
+        waterAdded = rows.length;
+      }
       if (data.sleep.length) {
         const { data: ex, error } = await supabase.from("sleep_logs").select("date").gte("date", data.sleep[0].date);
         if (error) throw error;
@@ -104,7 +113,7 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
         if (latest.date >= addDays(dateKey(), -7)) await run(supabase.from("profiles").update({ weight_kg: latest.weight_kg }).eq("id", user_id));
       }
       queryClient.invalidateQueries(); // refresh in the background
-      const msg = `Imported ${data.steps.length} days of steps, ${data.exercises.length} workouts, ${sleepAdded} nights of sleep and ${weightAdded} weigh-ins.`;
+      const msg = `Imported ${data.steps.length} days of steps & calories, ${data.exercises.length} workouts, ${waterAdded} water entries, ${sleepAdded} nights of sleep and ${weightAdded} weigh-ins.`;
       setResult(msg); toast("Samsung Health data imported");
     } catch (e) { toast(`Import failed: ${(e as Error).message}`, { tone: "bad" }); }
     setBusy(null);
@@ -122,7 +131,7 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
             <li>Make sure your watch has synced to the <b className="text-fg">Samsung Health</b> app.</li>
             <li>In Samsung Health tap <b className="text-fg">☰ / ⋮ → Settings → Download personal data</b> and confirm with your Samsung account.</li>
             <li>It saves a folder (or .zip) to <b className="text-fg">Internal storage → Download → Samsung Health</b>.</li>
-            <li>Choose that <b className="text-fg">.zip</b>, or select the <b className="text-fg">.csv files</b> inside the folder, below.</li>
+            <li>Choose that <b className="text-fg">.zip</b>, or select the <b className="text-fg">.csv files</b> inside the folder, below. You can select all of them — files that aren&apos;t needed are ignored.</li>
           </ol>
           <input ref={input} type="file" multiple accept=".zip,.csv,application/zip,text/csv" hidden onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
           <Button size="lg" className="w-full" loading={busy === "read"} onClick={() => input.current?.click()} icon={<FileArchive className="size-4" />}>{parsed ? "Choose different files" : "Choose export files"}</Button>
@@ -132,9 +141,13 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
               <div className="grid grid-cols-2 gap-3 rounded-2xl border border-line bg-bg-2 p-3">
                 <Metric label="Days of steps" value={data.steps.length} sub={data.steps.length ? `${data.steps[0].date} → ${data.steps[data.steps.length - 1].date}` : "none found"} />
                 <Metric label="Workouts" value={data.exercises.length} sub={data.exercises.length ? [...new Set(data.exercises.map((e) => e.label))].slice(0, 3).join(", ") : "none found"} />
+                <Metric label="Water entries" value={data.water.length} sub={data.water.length ? `${data.water.reduce((a, w) => a + w.amount_ml, 0) / 1000} L total` : "none found"} />
+                <Metric label="Active calories" value={data.steps.reduce((a, x) => a + x.calories, 0).toLocaleString()} unit="kcal" sub={data.steps.some((x) => x.resting_calories) ? "+ resting (BMR) per day" : undefined} />
                 <Metric label="Nights of sleep" value={data.sleep.length} />
                 <Metric label="Weigh-ins" value={data.weight.length} />
               </div>
+              {!data.sleep.length && <p className="rounded-xl bg-warm-soft px-3 py-2 text-xs text-warm">No sleep sessions found. Sleep is in the file named <b>com.samsung.shealth.sleep.….csv</b> (not <i>sleep_raw_data</i>, <i>sleep_stage</i> or <i>sleep_combined</i>). Select it too to import sleep.</p>}
+              {parsed!.skipped.length > 0 && <details className="text-xs text-faint"><summary className="cursor-pointer">{parsed!.skipped.length} file{parsed!.skipped.length > 1 ? "s" : ""} not used</summary><p className="mt-1 break-all">{parsed!.skipped.join(", ")}</p></details>}
               <p className="text-xs text-faint">Read {parsed!.files.length} file{parsed!.files.length > 1 ? "s" : ""}. Daily walking distance comes from your step totals, so workouts aren&apos;t counted twice. Sleep and weight only fill days you haven&apos;t logged yourself.</p>
             </>
           )}

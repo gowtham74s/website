@@ -3,7 +3,7 @@ import { Activity, BedDouble, CalendarDays, Check, ChevronRight, Droplets, Dumbb
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { addDays, expandEvents, findConflicts, habitScheduled, habitStreaks, planForDay, programDay, readiness, remaining, sleepConsistency, totalSteps, walkDistance, objectivesMet } from "@/lib/calc";
+import { activeCalories, addDays, expandEvents, findConflicts, habitScheduled, habitStreaks, planForDay, programDay, readiness, remaining, sleepConsistency, totalSteps, walkDistance, objectivesMet } from "@/lib/calc";
 import { useRows } from "@/lib/data";
 import { dayData, today, useActiveProgram, useEvents, useProfile, useRange, useScores } from "@/lib/hooks";
 import type { PlanExercise, RecoveryLog } from "@/lib/types";
@@ -175,7 +175,7 @@ export default function Dashboard() {
             <div className="mt-4 grid grid-cols-3 gap-3">
               <Metric label="Steps" value={totalSteps(d.activity).toLocaleString()} />
               <Metric label="Remaining" value={remaining(tg.walkKm, tot.walk)} unit="km" />
-              <Metric label="Active" value={d.activity.reduce((a, x) => a + (x.active_calories || 0), 0)} unit="kcal" />
+              <Metric label="Active" value={activeCalories(d.activity, profile.weight_kg, profile.height_cm).active} unit="kcal" />
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2"><Button onClick={() => router.push("/activity?walk=1")} icon={<Play className="size-4" />}>Start walk</Button><Button onClick={() => setSheet("walk")}>Log manually</Button></div>
           </div>

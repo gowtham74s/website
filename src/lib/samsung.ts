@@ -6,11 +6,12 @@
 
 export type ActivityKind = "walk" | "run" | "cycle" | "cardio" | "swim" | "hike" | "other";
 
-export interface SamsungDailySteps { date: string; steps: number; distance_km: number; calories: number }
+export interface SamsungDailySteps { date: string; steps: number; distance_km: number; calories: number; active_min: number; resting_calories: number }
+export interface SamsungWater { date: string; logged_at: string; amount_ml: number }
 export interface SamsungExercise { date: string; start: string; end: string; type: ActivityKind; label: string; duration_min: number; distance_km: number; calories: number }
 export interface SamsungSleep { date: string; bedtime: string; wake_time: string; duration_min: number }
 export interface SamsungWeight { date: string; weight_kg: number; body_fat_pct: number | null }
-export interface SamsungData { steps: SamsungDailySteps[]; exercises: SamsungExercise[]; sleep: SamsungSleep[]; weight: SamsungWeight[]; files: string[] }
+export interface SamsungData { steps: SamsungDailySteps[]; exercises: SamsungExercise[]; sleep: SamsungSleep[]; weight: SamsungWeight[]; water: SamsungWater[]; files: string[]; skipped: string[]; calorieGoal: number | null }
 
 /** Minimal RFC-4180 CSV line splitter (handles quoted fields with commas/quotes). */
 export function splitCsvLine(line: string): string[] {
@@ -73,13 +74,19 @@ const EXERCISE_TYPES: Record<number, [ActivityKind, string]> = {
   10004: ["other", "Weight training"], 10007: ["other", "Circuit training"], 0: ["other", "Workout"],
 };
 
+// Export file names look like `com.samsung.shealth.exercise.20261128114729_1.csv` (the `_n` part is optional).
 const fileKind = (name: string) => {
-  const n = name.toLowerCase().split("/").pop() || "";
-  if (/pedometer_day_summary/.test(n)) return "day_summary";
-  if (/step_daily_trend/.test(n)) return "daily_trend";
-  if (/\.exercise\.\d+\.csv$/.test(n) || /shealth\.exercise\.\d/.test(n)) return "exercise";
-  if (/\.sleep\.\d+\.csv$/.test(n) && !/stage|combined|raw/.test(n)) return "sleep";
-  if (/\.weight\.\d+\.csv$/.test(n)) return "weight";
+  const n = (name.toLowerCase().split("/").pop() || "").replace(/^[0-9a-f]{8}-/, "");
+  const is = (key: string) => new RegExp(`(^|[.-])${key.replace(/\./g, "\\.")}\\.\\d{8,}(_\\d+)?\\.csv$`).test(n);
+  if (is("activity.day_summary")) return "activity_day";
+  if (is("calories_burned.details")) return "calories_burned";
+  if (is("tracker.pedometer_day_summary") || is("pedometer_day_summary")) return "day_summary";
+  if (is("step_daily_trend")) return "daily_trend";
+  if (is("shealth.exercise") || is("health.exercise")) return "exercise";
+  if (is("shealth.sleep") || is("health.sleep")) return "sleep";
+  if (is("health.weight") || is("shealth.weight")) return "weight";
+  if (is("water_intake")) return "water";
+  if (is("active_calories.goal")) return "calorie_goal";
   return null;
 };
 
@@ -87,29 +94,47 @@ export const isSamsungFile = (name: string) => fileKind(name) !== null;
 
 /** Turn the CSV files of a Samsung Health export into normalized records. */
 export function parseSamsungExport(files: { name: string; text: string }[]): SamsungData {
-  const out: SamsungData = { steps: [], exercises: [], sleep: [], weight: [], files: [] };
+  const out: SamsungData = { steps: [], exercises: [], sleep: [], weight: [], water: [], files: [], skipped: [], calorieGoal: null };
   const stepsByDate = new Map<string, SamsungDailySteps & { prio: number }>();
+  const resting = new Map<string, { rest: number; active: number }>();
+  const dayKey = (v: string | undefined) => {
+    if (!v) return null;
+    if (/^\d{11,}$/.test(v)) { const d = new Date(Number(v)); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`; }
+    return v.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] ?? null; // day_time is already the local calendar day
+  };
 
   for (const f of files) {
     const kind = fileKind(f.name);
-    if (!kind) continue;
+    if (!kind) { if (/\.csv$/i.test(f.name)) out.skipped.push(f.name.split("/").pop()!); continue; }
     out.files.push(f.name.split("/").pop()!);
     const rows = parseSamsungCsv(f.text);
 
-    if (kind === "day_summary" || kind === "daily_trend") {
+    if (kind === "day_summary" || kind === "daily_trend" || kind === "activity_day") {
       for (const r of rows) {
-        // day_time is midnight (UTC) of the local day, as epoch ms
-        const dt = r.day_time ? new Date(Number(r.day_time)) : parseUtc(r.create_time);
-        if (!dt || Number.isNaN(dt.getTime())) continue;
-        const date = `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
+        const date = dayKey(r.day_time) ?? (parseUtc(r.create_time) ? dayKey(String(parseUtc(r.create_time)!.getTime())) : null);
+        if (!date) continue;
         const steps = Math.round(num(r.step_count || r.count));
         if (!steps) continue;
-        // In daily_trend, source_type -2 is Samsung's merged "all devices" total — prefer it.
-        const prio = kind === "daily_trend" ? (r.source_type === "-2" ? 3 : 1) : 2;
-        const rec = { date, steps, distance_km: Math.round((num(r.distance) / 1000) * 100) / 100, calories: Math.round(num(r.calorie)), prio };
+        // activity.day_summary is Samsung's own merged daily total; in daily_trend source_type -2 is the merged row.
+        const prio = kind === "activity_day" ? 4 : kind === "daily_trend" ? (r.source_type === "-2" ? 3 : 1) : 2;
+        const rec = { date, steps, distance_km: Math.round((num(r.distance) / 1000) * 100) / 100, calories: Math.round(num(r.calorie)), active_min: Math.round(num(r.active_time) / 60000), resting_calories: 0, prio };
         const ex = stepsByDate.get(date);
         if (!ex || prio > ex.prio || (prio === ex.prio && steps > ex.steps)) stepsByDate.set(date, rec);
       }
+    } else if (kind === "calories_burned") {
+      for (const r of rows) {
+        const date = dayKey(r.day_time);
+        if (date) resting.set(date, { rest: Math.round(num(r.rest_calorie)), active: Math.round(num(r.active_calorie)) });
+      }
+    } else if (kind === "water") {
+      for (const r of rows) {
+        const s = parseUtc(r.start_time); const ml = Math.round(num(r.amount));
+        if (!s || ml <= 0 || ml > 5000) continue;
+        out.water.push({ date: localDateKey(s, offsetMinutes(r.time_offset)), logged_at: s.toISOString(), amount_ml: ml });
+      }
+    } else if (kind === "calorie_goal") {
+      const last = rows.filter((r) => num(r.value) > 0).pop();
+      if (last) out.calorieGoal = Math.round(num(last.value));
     } else if (kind === "exercise") {
       for (const r of rows) {
         const s = parseUtc(r.start_time), e = parseUtc(r.end_time);
@@ -144,7 +169,11 @@ export function parseSamsungExport(files: { name: string; text: string }[]): Sam
       }
     }
   }
-  out.steps = [...stepsByDate.values()].map(({ prio: _p, ...r }) => r).sort((a, b) => a.date.localeCompare(b.date));
+  out.steps = [...stepsByDate.values()].map(({ prio: _p, ...r }) => {
+    const c = resting.get(r.date);
+    return { ...r, resting_calories: c?.rest ?? 0, calories: r.calories || c?.active || 0 };
+  }).sort((a, b) => a.date.localeCompare(b.date));
+  out.water.sort((a, b) => a.logged_at.localeCompare(b.logged_at));
   out.exercises.sort((a, b) => a.start.localeCompare(b.start));
   out.sleep.sort((a, b) => a.date.localeCompare(b.date));
   // keep one weight per day (the last one)

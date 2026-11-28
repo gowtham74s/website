@@ -108,7 +108,7 @@ export interface HydrationLog extends Owned { date: string; amount_ml: number; l
 
 export type ActivityType = "walk" | "run" | "cycle" | "cardio" | "swim" | "hike" | "other";
 export interface ActivityLog extends Owned {
-  date: string; type: ActivityType; steps: number; distance_km: number; duration_min: number; active_calories: number;
+  date: string; type: ActivityType; steps: number; distance_km: number; duration_min: number; active_calories: number; resting_calories?: number;
   source: string; notes: string | null; logged_at: string;
 }
 

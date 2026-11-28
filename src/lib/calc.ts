@@ -73,6 +73,50 @@ export function walkDistance(rows: ActivityLog[]) {
 }
 export const totalSteps = (rows: ActivityLog[]) => rows.reduce((a, r) => a + (r.steps || 0), 0);
 
+// ---------------------------------------------------------------- calories burned from activity
+/** Stride length in km from height (walking ≈ 0.415 × height, running ≈ 0.65 × height). */
+export function strideKm(heightCm: number | null | undefined, running = false) {
+  if (!heightCm || heightCm < 100 || heightCm > 250) return running ? 0.0011 : STEP_KM;
+  return (heightCm * (running ? 0.65 : 0.415)) / 100000;
+}
+
+// Net MET values (MET − 1, i.e. above resting) used when only time is known.
+const NET_MET: Record<string, number> = { walk: 2.5, hike: 5, run: 8.8, cycle: 6.5, swim: 6, cardio: 6, other: 4 };
+// Net cost per kg per km — the classic, well-validated rule of thumb for walking (~0.5) and running (~1.0).
+const PER_KG_KM: Record<string, number> = { walk: 0.5, hike: 0.65, run: 1.0 };
+
+export interface CalorieEstimate { kcal: number; method: "distance" | "steps" | "time" | "none"; distance_km: number }
+
+/**
+ * Estimate active (above-resting) calories for one activity from whatever is known:
+ * distance (best for walk/run/hike), steps (converted to distance with your stride), or duration (MET × weight × time).
+ */
+export function estimateActiveCalories(a: { type: string; distance_km?: number | null; steps?: number | null; duration_min?: number | null }, weightKg: number | null | undefined, heightCm?: number | null): CalorieEstimate {
+  const kg = weightKg && weightKg > 25 ? weightKg : 70;
+  const running = a.type === "run";
+  let dist = Number(a.distance_km) || 0;
+  let method: CalorieEstimate["method"] = dist > 0 ? "distance" : "none";
+  if (!dist && a.steps && PER_KG_KM[a.type] !== undefined) { dist = a.steps * strideKm(heightCm, running); method = "steps"; }
+  if (dist > 0 && PER_KG_KM[a.type] !== undefined) return { kcal: Math.round(PER_KG_KM[a.type] * kg * dist), method, distance_km: Math.round(dist * 100) / 100 };
+  const min = Number(a.duration_min) || 0;
+  if (min > 0) return { kcal: Math.round(((NET_MET[a.type] ?? NET_MET.other) * kg * min) / 60), method: "time", distance_km: Math.round(dist * 100) / 100 };
+  if (dist > 0 && a.type === "cycle") return { kcal: Math.round(0.28 * kg * dist), method: "distance", distance_km: dist };
+  return { kcal: 0, method: "none", distance_km: dist };
+}
+
+/** Active calories for a set of activity rows: recorded values first (watch/manual), estimates for the rest. */
+export function activeCalories(rows: ActivityLog[], weightKg: number | null | undefined, heightCm?: number | null) {
+  const hasDaily = rows.some((r) => r.source === "samsung");
+  let recorded = 0, estimated = 0;
+  for (const r of rows) {
+    if (hasDaily && r.source === "samsung_workout") continue; // already inside the watch's daily total
+    if (r.active_calories > 0) recorded += r.active_calories;
+    else estimated += estimateActiveCalories(r, weightKg, heightCm).kcal;
+  }
+  const resting = rows.reduce((m, r) => Math.max(m, r.resting_calories || 0), 0);
+  return { active: Math.round(recorded + estimated), recorded: Math.round(recorded), estimated: Math.round(estimated), resting, total: resting ? Math.round(resting + recorded + estimated) : null };
+}
+
 // ---------------------------------------------------------------- sleep / recovery
 export function sleepMinutes(bedtimeISO: string, wakeISO: string) {
   let m = Math.round((new Date(wakeISO).getTime() - new Date(bedtimeISO).getTime()) / 60000);

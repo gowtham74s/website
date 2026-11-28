@@ -2,7 +2,7 @@
 // Reusable logging sheets: food, water, weight, habits, activity, sleep, recovery check-in.
 import { Check, ChevronLeft, Search, Star, Trash2, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
-import { addDays, dateKey, habitScheduled, recipeNutrition, scaleFood, sleepMinutes, sumMacros } from "@/lib/calc";
+import { addDays, dateKey, estimateActiveCalories, habitScheduled, recipeNutrition, scaleFood, sleepMinutes, sumMacros } from "@/lib/calc";
 import { deleteById, deleteRows, insertRows, updateById, upsertRow, useRows } from "@/lib/data";
 import { today, useProfile } from "@/lib/hooks";
 import type { ActivityType, Food, Habit, HabitLog, Macros, Meal, MealCategory, NutritionLog, Recipe, RecipeIngredient, RecoveryLog, SleepLog } from "@/lib/types";
@@ -272,15 +272,19 @@ export function WeightSheet({ open, onClose, full }: { open: boolean; onClose: (
 // ---------------------------------------------------------------- activity
 export function ActivitySheet({ open, onClose, initial }: { open: boolean; onClose: () => void; initial?: { distance_km?: number; duration_min?: number } }) {
   const toast = useToast();
+  const { profile } = useProfile();
   const [type, setType] = useState<ActivityType>("walk");
   const [km, setKm] = useState(initial?.distance_km ?? 2);
   const [min, setMin] = useState(initial?.duration_min ?? 25);
   const [steps, setSteps] = useState(0);
-  const [cal, setCal] = useState(0);
+  const [cal, setCal] = useState<number | null>(null); // null = use the live estimate
   const [date, setDate] = useState(today());
+  const est = estimateActiveCalories({ type, distance_km: km, steps, duration_min: min }, profile?.weight_kg, profile?.height_cm);
+  const kcal = cal ?? est.kcal;
+  const how = { distance: `${est.distance_km} km × your weight`, steps: `${steps.toLocaleString()} steps ≈ ${est.distance_km} km (stride from your height)`, time: `${Math.round(min)} min of ${type} (MET × your weight)`, none: "" }[est.method];
   const save = async () => {
     try {
-      const [row] = await insertRows("activity_logs", { date, type, distance_km: km, duration_min: Math.round(min), steps: Math.round(steps), active_calories: Math.round(cal), source: "manual", logged_at: new Date().toISOString() });
+      const [row] = await insertRows("activity_logs", { date, type, distance_km: km || est.distance_km, duration_min: Math.round(min), steps: Math.round(steps), active_calories: Math.round(kcal), source: "manual", logged_at: new Date().toISOString() });
       toast(`Logged ${km} km ${type}`, { undo: () => deleteById("activity_logs", row.id) });
       onClose();
     } catch (e) { toast((e as Error).message, { tone: "bad" }); }
@@ -292,10 +296,12 @@ export function ActivitySheet({ open, onClose, initial }: { open: boolean; onClo
         <Stepper label="Distance" unit="km" value={km} onChange={setKm} step={0.5} />
         <Stepper label="Duration" unit="min" value={min} onChange={setMin} step={5} />
         <Stepper label="Steps (optional)" value={steps} onChange={setSteps} step={500} max={100000} />
-        <Stepper label="Active kcal (optional)" value={cal} onChange={setCal} step={10} />
+        <Stepper label={cal == null ? "Active kcal (estimated)" : "Active kcal (yours)"} value={kcal} onChange={setCal} step={10} />
       </div>
+      {cal == null ? (est.kcal > 0 && <p className="mt-2 text-xs text-faint">≈ {est.kcal} kcal from {how}{profile?.weight_kg ? ` (${profile.weight_kg} kg)` : " (assuming 70 kg — set your weight in Settings)"}. Adjust it if your watch shows a different number.</p>)
+        : <button className="mt-2 text-xs text-good" onClick={() => setCal(null)}>Use the estimate ({est.kcal} kcal) instead</button>}
       <Field label="Date" className="mt-4"><Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} /></Field>
-      <p className="mt-3 text-xs text-faint">If you only log steps, distance is estimated at ~0.76 m per step.</p>
+      <p className="mt-3 text-xs text-faint">If you only log steps, distance is estimated from your stride (based on your height).</p>
     </Sheet>
   );
 }

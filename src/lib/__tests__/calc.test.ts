@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  estimateActiveCalories, activeCalories, strideKm,
   scaleFood, sumMacros, recipeNutrition, walkDistance, sleepMinutes, readiness, isPersonalRecord, suggestOverload,
   habitStreaks, rollingAverage, trendPerWeek, dayScore, programDay, expandEvents, findConflicts, addDays, calorieScore,
 } from "../calc.ts";
@@ -101,4 +102,31 @@ test("recurring events and conflicts", () => {
   const occ = expandEvents([ev("a", "2026-03-02T09:00:00", "2026-03-02T10:00:00", "weekdays"), ev("b", "2026-03-04T09:30:00", "2026-03-04T10:30:00")], "2026-03-01", "2026-03-08");
   assert.equal(occ.filter((o) => o.event.id === "a").length, 5);
   assert.equal(findConflicts(occ).length, 1);
+});
+
+test("calorie estimates from distance, steps and time", () => {
+  // walking 4 km at 80 kg ≈ 0.5 × 80 × 4 = 160 kcal
+  assert.deepEqual(estimateActiveCalories({ type: "walk", distance_km: 4 }, 80), { kcal: 160, method: "distance", distance_km: 4 });
+  // running costs about double per km
+  assert.equal(estimateActiveCalories({ type: "run", distance_km: 5 }, 70).kcal, 350);
+  // steps → distance via stride from height (175 cm → 0.726 m), 10,000 steps ≈ 7.26 km
+  const s = estimateActiveCalories({ type: "walk", steps: 10000 }, 80, 175);
+  assert.equal(s.method, "steps"); assert.equal(s.distance_km, 7.26); assert.equal(s.kcal, 291);
+  // time only: 60 min cycling, net MET 6.5 × 70 kg = 455
+  assert.deepEqual(estimateActiveCalories({ type: "cycle", duration_min: 60 }, 70), { kcal: 455, method: "time", distance_km: 0 });
+  assert.equal(estimateActiveCalories({ type: "walk" }, 70).kcal, 0);
+  assert.ok(Math.abs(strideKm(175) - 0.00072625) < 1e-9);
+});
+
+test("active calories prefer recorded values and avoid double counting", () => {
+  const rows: any[] = [
+    { type: "walk", source: "samsung", steps: 9000, distance_km: 6.8, active_calories: 310, resting_calories: 1700 },
+    { type: "walk", source: "samsung_workout", distance_km: 3, active_calories: 150 },
+    { type: "cycle", source: "manual", duration_min: 30, active_calories: 0 },
+  ];
+  const r = activeCalories(rows, 70);
+  assert.equal(r.recorded, 310);
+  assert.equal(r.estimated, 228); // 6.5 × 70 × 0.5h
+  assert.equal(r.total, 1700 + 538);
+  assert.equal(activeCalories([rows[2]], 70).total, null);
 });
