@@ -74,23 +74,27 @@ const EXERCISE_TYPES: Record<number, [ActivityKind, string]> = {
   10004: ["other", "Weight training"], 10007: ["other", "Circuit training"], 0: ["other", "Workout"],
 };
 
-// Export file names look like `com.samsung.shealth.exercise.20261128114729_1.csv` (the `_n` part is optional).
-const fileKind = (name: string) => {
-  const n = (name.toLowerCase().split("/").pop() || "").replace(/^[0-9a-f]{8}-/, "");
-  const is = (key: string) => new RegExp(`(^|[.-])${key.replace(/\./g, "\\.")}\\.\\d{8,}(_\\d+)?\\.csv$`).test(n);
-  if (is("activity.day_summary")) return "activity_day";
-  if (is("calories_burned.details")) return "calories_burned";
-  if (is("tracker.pedometer_day_summary") || is("pedometer_day_summary")) return "day_summary";
-  if (is("step_daily_trend")) return "daily_trend";
-  if (is("shealth.exercise") || is("health.exercise")) return "exercise";
-  if (is("shealth.sleep") || is("health.sleep")) return "sleep";
-  if (is("health.weight") || is("shealth.weight")) return "weight";
-  if (is("water_intake")) return "water";
-  if (is("active_calories.goal")) return "calorie_goal";
-  return null;
+// Every Samsung Health CSV starts with a line naming its data type, e.g.
+// `com.samsung.shealth.activity.day_summary,7014003,6`. We recognise files by that line first, so it works
+// even when a phone's file picker renames the file; the file name (`<type>.<timestamp>[_n].csv`) is the fallback.
+const KINDS: Record<string, string> = {
+  "activity.day_summary": "activity_day", "calories_burned.details": "calories_burned",
+  "tracker.pedometer_day_summary": "day_summary", "pedometer_day_summary": "day_summary", "step_daily_trend": "daily_trend",
+  "exercise": "exercise", "sleep": "sleep", "weight": "weight", "water_intake": "water", "active_calories.goal": "calorie_goal",
+};
+export function dataTypeOf(name: string, text?: string): string | null {
+  const first = text?.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0]?.split(",")[0]?.trim().toLowerCase();
+  if (first && /^com\.samsung\.[a-z0-9_.]+$/.test(first)) return first;
+  const n = (name.toLowerCase().split(/[\\/]/).pop() || "").replace(/^[0-9a-f]{8}-/, "");
+  return n.match(/(com\.samsung\.[a-z0-9_.]+?)\.\d{8,}(?:_\d+)?(?:\s*\(\d+\))?\.csv$/)?.[1] ?? null;
+}
+const fileKind = (name: string, text?: string) => {
+  const t = dataTypeOf(name, text);
+  return t ? KINDS[t.replace(/^com\.samsung\.s?health\./, "")] ?? null : null;
 };
 
-export const isSamsungFile = (name: string) => fileKind(name) !== null;
+/** True for any Samsung Health CSV (used or not) — so we can tell "wrong files" from "unsupported data". */
+export const isSamsungFile = (name: string, text?: string) => dataTypeOf(name, text) !== null;
 
 /** Turn the CSV files of a Samsung Health export into normalized records. */
 export function parseSamsungExport(files: { name: string; text: string }[]): SamsungData {
@@ -104,8 +108,8 @@ export function parseSamsungExport(files: { name: string; text: string }[]): Sam
   };
 
   for (const f of files) {
-    const kind = fileKind(f.name);
-    if (!kind) { if (/\.csv$/i.test(f.name)) out.skipped.push(f.name.split("/").pop()!); continue; }
+    const kind = fileKind(f.name, f.text);
+    if (!kind) { if (isSamsungFile(f.name, f.text)) out.skipped.push(f.name.split("/").pop()!); continue; }
     out.files.push(f.name.split("/").pop()!);
     const rows = parseSamsungCsv(f.text);
 

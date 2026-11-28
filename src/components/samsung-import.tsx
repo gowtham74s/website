@@ -14,13 +14,19 @@ const chunk = <T,>(a: T[], n = 400) => Array.from({ length: Math.ceil(a.length /
 
 async function readFiles(list: FileList) {
   const out: { name: string; text: string }[] = [];
+  const chosen: string[] = [];
   for (const f of Array.from(list)) {
-    if (/\.zip$/i.test(f.name)) {
-      const files = unzipSync(new Uint8Array(await f.arrayBuffer()), { filter: (e) => /\.csv$/i.test(e.name) && isSamsungFile(e.name) });
+    chosen.push(f.name || "(unnamed file)");
+    const head = new Uint8Array(await f.slice(0, 4).arrayBuffer());
+    const isZip = /\.zip$/i.test(f.name) || (head[0] === 0x50 && head[1] === 0x4b); // "PK" zip signature
+    if (isZip) {
+      const files = unzipSync(new Uint8Array(await f.arrayBuffer()), { filter: (e) => /\.csv$/i.test(e.name) });
       for (const [name, data] of Object.entries(files)) out.push({ name, text: strFromU8(data) });
-    } else if (/\.csv$/i.test(f.name) && isSamsungFile(f.name)) out.push({ name: f.name, text: await f.text() });
+    } else if (f.size < 100 * 1024 * 1024) {
+      out.push({ name: f.name, text: await f.text() }); // recognised by content, whatever the name/extension
+    }
   }
-  return out;
+  return { files: out, chosen };
 }
 
 function inRange(d: SamsungData, days: number | null): SamsungData {
@@ -56,9 +62,14 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
     if (!list?.length) return;
     setBusy("read"); setResult(null);
     try {
-      const files = await readFiles(list);
+      const { files, chosen } = await readFiles(list);
       const d = parseSamsungExport(files);
-      if (!d.files.length) throw new Error("No Samsung Health files found. Choose the export .zip, or the CSV files inside it.");
+      if (!d.files.length) {
+        const samsung = files.filter((f) => isSamsungFile(f.name, f.text)).length;
+        throw new Error(samsung
+          ? `Those files are Samsung Health data, but not the kinds Forge imports (${d.skipped.slice(0, 3).join(", ")}). Include activity.day_summary, calories_burned.details, water_intake, exercise, sleep or weight files.`
+          : `No Samsung Health data found in: ${chosen.slice(0, 4).join(", ")}${chosen.length > 4 ? "…" : ""}. Choose the CSV files from Download › Samsung Health (or the export .zip).`);
+      }
       setParsed(d);
     } catch (e) { toast((e as Error).message, { tone: "bad" }); setParsed(null); }
     setBusy(null);
@@ -133,7 +144,7 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
             <li>It saves a folder (or .zip) to <b className="text-fg">Internal storage → Download → Samsung Health</b>.</li>
             <li>Choose that <b className="text-fg">.zip</b>, or select the <b className="text-fg">.csv files</b> inside the folder, below. You can select all of them — files that aren&apos;t needed are ignored.</li>
           </ol>
-          <input ref={input} type="file" multiple accept=".zip,.csv,application/zip,text/csv" hidden onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
+          <input ref={input} type="file" multiple hidden onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
           <Button size="lg" className="w-full" loading={busy === "read"} onClick={() => input.current?.click()} icon={<FileArchive className="size-4" />}>{parsed ? "Choose different files" : "Choose export files"}</Button>
           {data && (
             <>

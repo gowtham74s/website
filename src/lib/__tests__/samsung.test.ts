@@ -57,3 +57,17 @@ test("real export formats: activity.day_summary + calories_burned + water, `_n` 
   assert.equal(d.calorieGoal, 500);
   assert.deepEqual(d.skipped, ["com.samsung.shealth.sleep_raw_data.20261128114729_1.csv"]);
 });
+
+test("files are recognised by content even when the phone renames them", () => {
+  const d = parseSamsungExport([
+    { name: "document:1000123", text: "﻿com.samsung.shealth.activity.day_summary,7014003,6\nstep_count,distance,calorie,active_time,day_time\n4000,3000,120,600000,2026-11-20 00:00:00.000,\n" },
+    { name: "msf_55.csv", text: "com.samsung.health.water_intake,7014003,6\nstart_time,amount,time_offset\n2026-11-20 04:00:00.000,500.0,UTC+0530,\n" },
+    { name: "com.samsung.shealth.calories_burned.details.20261128114729_1 (1).csv", text: "com.samsung.shealth.calories_burned.details,7014003,4\ncom.samsung.shealth.calories_burned.rest_calorie,com.samsung.shealth.calories_burned.day_time\n2000,2026-11-20 00:00:00.000,\n" },
+    { name: "notes.txt", text: "hello" },
+  ]);
+  assert.equal(d.steps.length, 1);
+  assert.equal(d.steps[0].resting_calories, 2000);
+  assert.equal(d.water.length, 1);
+  assert.equal(d.files.length, 3);
+  assert.deepEqual(d.skipped, []);
+});
