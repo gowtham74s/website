@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { Button, Field, Input, Segmented } from "@/components/ui";
+import { MotionBackground, SloganTicker } from "@/components/vibe";
 
 export default function Login() {
   const router = useRouter();
@@ -45,11 +46,13 @@ export default function Login() {
   };
 
   return (
-    <div className="grid min-h-dvh lg:grid-cols-2">
-      <div className="hero-grad relative hidden flex-col justify-between overflow-hidden border-r border-line p-12 lg:flex">
+    <div className="relative grid min-h-dvh lg:grid-cols-2">
+      <MotionBackground />
+      <div className="hero-grad relative z-10 hidden flex-col justify-between overflow-hidden border-r border-line p-12 lg:flex">
         <div className="flex items-center gap-3"><img src="/icons/icon.svg" alt="" className="size-10 rounded-xl" /><span className="font-display text-xl font-semibold">Forge</span></div>
         <div>
-          <h1 className="font-display text-5xl font-semibold leading-[1.05] tracking-tight">Your daily<br />command center.</h1>
+          <h1 className="font-display text-5xl font-semibold leading-[1.05] tracking-tight">Your daily<br /><span className="brand-text">command center.</span></h1>
+          <SloganTicker className="mt-4 block text-xl" />
           <p className="mt-5 max-w-md text-lg text-muted">Training, nutrition, hydration, sleep, habits and your schedule — one honest view of what to do today and whether it&apos;s working.</p>
         </div>
         <div className="grid grid-cols-3 gap-4 text-sm text-muted">
@@ -58,7 +61,7 @@ export default function Login() {
           <div><div className="num text-2xl font-semibold text-fg">PWA</div>Install on phone</div>
         </div>
       </div>
-      <div className="flex items-center justify-center px-5 py-12">
+      <div className="relative z-10 flex items-center justify-center px-5 py-12">
         <form onSubmit={submit} className="w-full max-w-sm anim-rise">
           <div className="mb-8 flex items-center gap-3 lg:hidden"><img src="/icons/icon.svg" alt="" className="size-10 rounded-xl" /><span className="font-display text-xl font-semibold">Forge</span></div>
           <h2 className="font-display text-3xl font-semibold tracking-tight">{mode === "signup" ? "Create your account" : mode === "forgot" ? "Reset your password" : "Welcome back"}</h2>

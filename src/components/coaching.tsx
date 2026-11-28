@@ -86,7 +86,7 @@ export function AssignmentSheet({ a, onClose, side, names }: { a: Assignment | n
     await updateById("assignments", a.id, { date: p.date ?? a.date, start_time: p.start_time ?? a.start_time, duration_min: p.duration_min ?? a.duration_min, ...(p.title ? { title: p.title } : {}), ...(p.details !== undefined ? { details: p.details || null } : {}), status: "assigned" });
     await sendMessage(a.id, "Change applied ✓");
     close();
-  }, "Change applied and sent to the user");
+  }, "Change applied and sent to the member");
 
   return (
     <Sheet open onClose={close} title={a.title} wide>
@@ -201,7 +201,7 @@ export function NewAssignmentSheet({ open, onClose, people, preselect }: { open:
   if (!open && init) setInit(false);
   const toggle = (id: string) => setSel(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
   return (
-    <Sheet open={open} onClose={onClose} title="New event for users" wide footer={
+    <Sheet open={open} onClose={onClose} title="New event for members" wide footer={
       <Button variant="good" className="w-full" disabled={!f.title.trim() || !sel.length} icon={<Send className="size-4" />} onClick={() => act(async () => {
         await createAssignments(sel, { title: f.title.trim(), type: f.type, details: f.details.trim() || null, date: f.date, start_time: f.start_time || null, duration_min: f.duration_min ? Number(f.duration_min) : null });
         setF({ ...f, title: "", details: "" }); onClose();
@@ -220,14 +220,14 @@ export function NewAssignmentSheet({ open, onClose, people, preselect }: { open:
         <div>
           <div className="mb-1.5 flex items-center justify-between text-[13px] font-medium text-muted"><span>Send to ({sel.length} selected)</span>
             <span className="flex gap-2"><button className="text-good" onClick={() => setSel(people.map((p) => p.id))}>All</button><button className="text-faint" onClick={() => setSel([])}>None</button></span></div>
-          <Input placeholder="Search users" value={q} onChange={(e) => setQ(e.target.value)} className="mb-2" />
+          <Input placeholder="Search members" value={q} onChange={(e) => setQ(e.target.value)} className="mb-2" />
           <div className="max-h-[300px] space-y-1 overflow-y-auto">
             {list.map((p) => (
               <label key={p.id} className={cx("flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-sm", sel.includes(p.id) ? "border-good/40 bg-good-soft" : "border-line")}>
-                <input type="checkbox" className="size-4 accent-[var(--good)]" checked={sel.includes(p.id)} onChange={() => toggle(p.id)} />{p.name || "Unnamed user"}
+                <input type="checkbox" className="size-4 accent-[var(--good)]" checked={sel.includes(p.id)} onChange={() => toggle(p.id)} />{p.name || "Unnamed member"}
               </label>
             ))}
-            {!list.length && <p className="text-sm text-faint">No users found.</p>}
+            {!list.length && <p className="text-sm text-faint">No members found.</p>}
           </div>
         </div>
       </div>

@@ -7,7 +7,9 @@ import { useSession } from "@/lib/auth";
 import { useSyncState } from "@/lib/data";
 import { useProfile } from "@/lib/hooks";
 import { NotificationBell } from "./coaching";
-import { Inbox, Megaphone, Menu, ShieldCheck } from "lucide-react";
+import { Avatar, MotionBackground, SloganTicker } from "./vibe";
+import { ROLE_LABEL } from "@/lib/coach";
+import { Inbox, Megaphone, Menu, ShieldCheck, Tent } from "lucide-react";
 import { Sheet } from "./ui";
 import { cx, Spinner } from "./ui";
 import { FoodLogSheet, HabitQuickSheet, WeightSheet, useAddWater } from "./loggers";
@@ -99,6 +101,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const role = profile?.role ?? "user";
   const ROLE_NAV = [
     { href: "/inbox", label: "Inbox", icon: Inbox },
+    { href: "/sessions", label: "Group sessions", icon: Tent },
     ...(role === "coach" || role === "admin" ? [{ href: "/coach", label: "Coach", icon: Megaphone }] : []),
     ...(role === "admin" ? [{ href: "/admin", label: "Admin", icon: ShieldCheck }] : []),
   ];
@@ -127,7 +130,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-line bg-bg-2/80 px-3 py-5 backdrop-blur lg:flex">
         <Link href="/" className="mb-6 flex items-center gap-2.5 px-3">
           <img src="/icons/icon.svg" alt="" className="size-8 rounded-lg" />
-          <span className="font-display text-lg font-semibold tracking-tight">Forge</span>
+          <span className="brand-text font-display text-lg font-bold tracking-tight">Forge</span>
         </Link>
         <div className="-mt-14 mb-6 flex justify-end px-1"><NotificationBell /></div>
         <nav className="flex flex-col gap-0.5">
@@ -144,6 +147,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="mt-auto space-y-3 px-1">
+          {profile && <Link href="/settings" className="flex items-center gap-2.5 rounded-xl px-2 py-2 hover:bg-card"><Avatar name={profile.name} emoji={profile.avatar_emoji} color={profile.avatar_color} size={32} /><div className="min-w-0"><div className="truncate text-sm font-medium">{profile.name || "Set your name"}</div><div className="text-[11px] text-faint">{ROLE_LABEL[role as "user"]}</div></div></Link>}
+          <SloganTicker className="block px-2 text-[13px] leading-snug" />
           <SyncPill />
           <button onClick={() => setQa(true)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-fg py-2.5 text-sm font-semibold text-bg transition active:scale-[.98]"><Plus className="size-4" />Quick log</button>
         </div>
@@ -151,17 +156,19 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* mobile top bar */}
       <header className="safe-t sticky top-0 z-30 flex items-center justify-between border-b border-line/60 bg-bg/80 px-4 py-2.5 backdrop-blur-xl lg:hidden">
-        <Link href="/" className="flex items-center gap-2"><img src="/icons/icon.svg" alt="" className="size-7 rounded-lg" /><span className="font-display font-semibold tracking-tight">Forge</span></Link>
+        <Link href="/" className="flex items-center gap-2"><img src="/icons/icon.svg" alt="" className="size-7 rounded-lg" /><span className="brand-text font-display font-bold tracking-tight">Forge</span></Link>
         <div className="flex items-center gap-1">
           <SyncPill />
           <NotificationBell />
           {(role === "coach" || role === "admin") && <Link href="/coach" aria-label="Coach" className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><Megaphone className="size-5" /></Link>}
           {role === "admin" && <Link href="/admin" aria-label="Admin" className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><ShieldCheck className="size-5" /></Link>}
+          {profile && <Link href="/settings" aria-label="Your profile"><Avatar name={profile.name} emoji={profile.avatar_emoji} color={profile.avatar_color} size={28} /></Link>}
           <button aria-label="Menu — all pages" onClick={() => setMenu(true)} className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><Menu className="size-5" /></button>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-4 pb-32 pt-5 sm:px-6 lg:px-10 lg:pb-16 lg:pt-10">{children}</main>
+      <MotionBackground />
+      <main className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-32 pt-5 sm:px-6 lg:px-10 lg:pb-16 lg:pt-10">{children}</main>
 
       {/* mobile bottom nav */}
       <nav className="safe-b fixed inset-x-0 bottom-0 z-40 border-t border-line bg-bg/85 backdrop-blur-xl lg:hidden" aria-label="Main">
@@ -184,7 +191,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           ))}
         </div>
-        <p className="mt-3 text-center text-xs text-faint">Signed in as {role}{role !== "user" ? " — Coach and Admin pages are in this menu" : ""}.</p>
+        <p className="mt-3 text-center text-xs text-faint">Signed in as {ROLE_LABEL[role as "user"]}{role !== "user" ? " — Coach and Admin pages are in this menu" : ""}.</p>
       </Sheet>
       <QuickActions open={qa} onClose={() => setQa(false)} />
       <ReminderEngine />

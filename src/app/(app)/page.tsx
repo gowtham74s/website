@@ -15,6 +15,8 @@ import { EVENT_COLORS } from "@/components/event-colors";
 import { StageBar, hasStages } from "@/components/sleep-viz";
 import { TrendTiles, WeekStrip } from "@/components/dashboard-viz";
 import { CoachInboxCard } from "@/components/coaching";
+import { SloganTicker } from "@/components/vibe";
+import { UpcomingSessions } from "@/components/upcoming-sessions";
 import type { ScoreKey } from "@/lib/types";
 
 const PART_HREF: Record<ScoreKey, string> = { workout: "/workout", nutrition: "/nutrition", protein: "/nutrition", water: "/hydration", walk: "/activity", sleep: "/sleep", habits: "/habits" };
@@ -98,6 +100,7 @@ export default function Dashboard() {
         <div>
           <div className="text-sm text-muted">{new Date(`${t}T12:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}{isPast && <button onClick={() => setDay(T)} className="ml-2 rounded-full bg-good-soft px-2 py-0.5 text-xs font-medium text-good">Back to today</button>}</div>
           <h1 className="font-display text-[28px] font-semibold tracking-tight sm:text-3xl">{greeting()}{profile.name ? `, ${profile.name.split(" ")[0]}` : ""}</h1>
+          <SloganTicker className="mt-1 block text-[15px] sm:text-base" />
         </div>
         {program && prog && (
           <Link href="/progress?tab=program" className="flex items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 text-sm">
@@ -108,6 +111,7 @@ export default function Dashboard() {
       </div>
 
       <WeekStrip scores={scores.slice(-7)} selected={t} today={T} onSelect={setDay} />
+      {!isPast && <div className="mt-4"><UpcomingSessions /></div>}
 
       {/* hero score */}
       <Card className="hero-grad mb-4 overflow-hidden p-5 sm:p-6">

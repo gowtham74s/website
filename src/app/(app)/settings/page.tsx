@@ -13,6 +13,8 @@ import { supabase } from "@/lib/supabase";
 import { clearDemoData, suggestTargets } from "@/lib/templates";
 import type { Profile, Reminder, ScoreKey, TableName } from "@/lib/types";
 import { notify } from "@/components/reminders";
+import { Avatar, AVATAR_COLORS, AVATAR_EMOJI } from "@/components/vibe";
+import { ROLE_LABEL } from "@/lib/coach";
 import { SamsungImportCard } from "@/components/samsung-import";
 import { Badge, Button, Card, Chip, Confirm, cx, Field, IconButton, Input, PageHeader, Section, Segmented, Select, Sheet, Stepper, Toggle, useAction, useToast } from "@/components/ui";
 
@@ -72,7 +74,7 @@ export default function SettingsPage() {
 
       <Card className="mb-6 flex flex-wrap items-center gap-3 p-4">
         <span className={cx("grid size-10 place-items-center rounded-xl", p.role === "admin" ? "bg-bad-soft text-bad" : p.role === "coach" ? "bg-info/15 text-info" : "bg-card-2 text-muted")}><Shield className="size-5" /></span>
-        <div className="min-w-0 flex-1 text-sm"><div className="font-medium">Your role: <span className="capitalize">{p.role ?? "user"}</span></div><div className="text-muted">{p.role === "admin" ? "You can switch anyone between user, coach and admin, and coach users." : p.role === "coach" ? "You can send events to users, see their daily progress and remind them." : "An admin can make you a coach."}</div></div>
+        <div className="min-w-0 flex-1 text-sm"><div className="font-medium">Your role: {ROLE_LABEL[p.role ?? "user"]}</div><div className="text-muted">{p.role === "admin" ? "You can switch anyone between Member, Coach and Admin, assign coaches and delete accounts." : p.role === "coach" ? "You coach your assigned members: events, daily progress and reminders. You can claim free members." : p.coach_id ? "You have a coach — their events and reminders arrive in your Inbox." : "An admin can make you a coach or assign you one."}</div></div>
         <div className="flex gap-2">
           {(p.role === "coach" || p.role === "admin") && <Link href="/coach"><Button size="sm">Coach page</Button></Link>}
           {p.role === "admin" && <Link href="/admin"><Button size="sm" variant="good">Manage roles</Button></Link>}
@@ -81,7 +83,18 @@ export default function SettingsPage() {
 
       <Section title="Profile">
         <Card className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
-          <Field label="Name"><Input value={p.name ?? ""} onChange={(e) => set({ name: e.target.value })} /></Field>
+          <div className="sm:col-span-2">
+            <div className="flex items-center gap-4">
+              <Avatar name={p.name} emoji={p.avatar_emoji} color={p.avatar_color} size={64} />
+              <Field label="Display name (what coaches and members see)" className="flex-1"><Input value={p.name ?? ""} maxLength={40} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. Gowtham" /></Field>
+            </div>
+            <div className="mt-3 text-[13px] font-medium text-muted">Avatar</div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              <button type="button" onClick={() => set({ avatar_emoji: null })} className={cx("grid size-9 place-items-center rounded-xl border text-xs", !p.avatar_emoji ? "border-good bg-good-soft" : "border-line")}>Aa</button>
+              {AVATAR_EMOJI.map((e) => <button key={e} type="button" aria-label={`Avatar ${e}`} onClick={() => set({ avatar_emoji: e })} className={cx("grid size-9 place-items-center rounded-xl border text-lg", p.avatar_emoji === e ? "border-good bg-good-soft" : "border-line")}>{e}</button>)}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">{AVATAR_COLORS.map((c) => <button key={c} type="button" aria-label={`Colour ${c}`} onClick={() => set({ avatar_color: c })} className={cx("size-7 rounded-full ring-offset-2 ring-offset-card", p.avatar_color === c && "ring-2 ring-fg")} style={{ background: c }} />)}</div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Age"><Input inputMode="numeric" value={p.age ?? ""} onChange={(e) => set({ age: Number(e.target.value) || null })} /></Field>
             <Field label="Sex (for estimates)"><Select value={p.sex ?? ""} onChange={(e) => set({ sex: e.target.value })}><option value="male">Male</option><option value="female">Female</option><option value="other">Prefer not to say</option></Select></Field>

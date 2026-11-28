@@ -41,6 +41,9 @@ export interface Profile {
   google_calendar: { connected?: boolean; calendar_id?: string; last_sync?: string };
   onboarded: boolean;
   role?: Role;
+  coach_id?: string | null;
+  avatar_emoji?: string | null;
+  avatar_color?: string | null;
 }
 
 interface Owned { id: string; user_id: string; is_demo?: boolean }
@@ -180,7 +183,7 @@ export type TableName =
   | "profiles" | "goals" | "exercises" | "workout_plans" | "plan_exercises" | "workouts" | "workout_sets" | "foods"
   | "food_favorites" | "recipes" | "recipe_ingredients" | "meals" | "nutrition_logs" | "meal_plan_entries"
   | "hydration_logs" | "activity_logs" | "sleep_logs" | "recovery_logs" | "habits" | "habit_logs" | "calendar_events"
-  | "body_measurements" | "progress_photos" | "reminders" | "transformation_programs" | "ai_messages" | "health_daily" | "assignments" | "assignment_messages" | "notifications";
+  | "body_measurements" | "progress_photos" | "reminders" | "transformation_programs" | "ai_messages" | "health_daily" | "assignments" | "assignment_messages" | "notifications" | "group_sessions" | "session_rsvps";
 
 export type AssignmentStatus = "assigned" | "accepted" | "done" | "change_requested" | "declined" | "cancelled";
 export interface Assignment {
@@ -196,7 +199,15 @@ export interface AppNotification {
   id: string; user_id: string; sender_id: string | null; kind: string; title: string; body: string | null; link: string | null; read_at: string | null; created_at: string;
 }
 export interface CoachRow {
-  user_id: string; name: string | null; role: Role; steps: number; walk_km: number; water_ml: number; water_target: number; sleep_min: number | null;
+  user_id: string; name: string | null; role: Role; coach_id: string | null; coach_name: string | null; avatar_emoji: string | null; avatar_color: string | null; steps: number; walk_km: number; water_ml: number; water_target: number; sleep_min: number | null;
   sleep_target: number; calories: number; calorie_target: number; protein: number; protein_target: number; walk_target: number; steps_target: number;
   workout_done: boolean; resting_hr: number | null; stress_avg: number | null; open_assignments: number; last_log: string | null;
 }
+
+export interface DirectoryEntry { id: string; name: string | null; role: Role; coach_id: string | null; coach_name: string | null; avatar_emoji: string | null; avatar_color: string | null }
+export interface GroupSession {
+  id: string; created_by: string; creator_name: string | null; title: string; description: string | null; location: string | null;
+  starts_at: string; ends_at: string; banner_path: string | null; audience: "everyone" | "my_members"; capacity: number | null;
+  status: "scheduled" | "cancelled"; created_at: string;
+}
+export interface SessionRsvp { session_id: string; user_id: string; user_name: string | null; status: "going" | "maybe" | "not_going"; calendar_event_id: string | null; created_at: string }

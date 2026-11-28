@@ -1,8 +1,8 @@
 /* Forge service worker — offline app shell + notification handling.
    Data requests (Supabase, /api) are never cached here; the app keeps its own
    persisted query cache and offline write queue. */
-const VERSION = "forge-v2";
-const SHELL = ["/", "/workout", "/nutrition", "/calendar", "/progress", "/habits", "/settings", "/hydration", "/activity", "/sleep", "/vitals", "/analytics", "/assistant", "/login", "/offline.html"];
+const VERSION = "forge-v3";
+const SHELL = ["/", "/workout", "/nutrition", "/calendar", "/progress", "/habits", "/settings", "/hydration", "/activity", "/sleep", "/vitals", "/analytics", "/assistant", "/sessions", "/inbox", "/login", "/offline.html"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => Promise.allSettled(SHELL.map((u) => c.add(u)))).then(() => self.skipWaiting()));

@@ -68,7 +68,7 @@ export function Button({ variant = "secondary", size = "md", loading, icon, clas
         variant === "secondary" && "border border-line bg-card-2 text-fg hover:border-line-2",
         variant === "ghost" && "text-muted hover:bg-card-2 hover:text-fg",
         variant === "danger" && "bg-bad-soft text-bad hover:bg-bad/20",
-        variant === "good" && "bg-good text-black hover:brightness-110",
+        variant === "good" && "brand-bg text-black shadow-[0_8px_24px_-10px_rgba(46,245,157,.6)] hover:brightness-110",
         variant === "warm" && "bg-warm text-black hover:brightness-110",
         className,
       )}

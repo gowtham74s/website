@@ -3,13 +3,14 @@
 import { supabase } from "./supabase";
 import { insertRows, queryClient, uid, updateById, useRows } from "./data";
 import { useProfile } from "./hooks";
-import type { AppNotification, Assignment, AssignmentStatus, CoachRow, Role } from "./types";
+import type { AppNotification, Assignment, AssignmentStatus, CoachRow, DirectoryEntry, GroupSession, Role } from "./types";
 
 export function useRole(): Role {
   const { profile } = useProfile();
   return (profile?.role as Role) ?? "user";
 }
 export const isStaff = (r: Role) => r === "coach" || r === "admin";
+export const ROLE_LABEL: Record<Role, string> = { user: "Member", coach: "Coach", admin: "Admin" };
 
 export const STATUS_LABEL: Record<AssignmentStatus, string> = {
   assigned: "New", accepted: "Accepted", done: "Done", change_requested: "Change requested", declined: "Declined", cancelled: "Cancelled",
@@ -90,4 +91,48 @@ export async function coachOverview(date: string) {
 export async function sendReminder(userId: string, title: string, body: string, link = "/") {
   const { error } = await supabase.rpc("send_reminder", { p_user: userId, p_title: title, p_body: body, p_link: link });
   if (error) throw error;
+}
+
+// ---------------------------------------------------------------- coach ↔ member assignment
+const rpc = async <T,>(fn: string, args?: Record<string, unknown>) => { const { data, error } = await supabase.rpc(fn, args); if (error) throw error; return data as T; };
+export const coachDirectory = () => rpc<DirectoryEntry[]>("coach_directory");
+export async function assignCoach(member: string, coach: string | null) {
+  await rpc("assign_coach", { p_member: member, p_coach: coach });
+  ["coach_overview", "coach_directory", "admin_users"].forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+}
+export async function assignCoachBulk(members: string[], coach: string | null) {
+  const n = await rpc<number>("assign_coach_bulk", { p_members: members, p_coach: coach });
+  queryClient.invalidateQueries({ queryKey: ["admin_users"] });
+  return n;
+}
+export async function autoDivideMembers() { const n = await rpc<number>("auto_divide_members"); queryClient.invalidateQueries({ queryKey: ["admin_users"] }); return n; }
+export async function adminDeleteUser(id: string) { await rpc("admin_delete_user", { p_user: id }); queryClient.invalidateQueries({ queryKey: ["admin_users"] }); }
+
+// ---------------------------------------------------------------- group sessions
+export const bannerUrl = (path: string | null) => (path ? supabase.storage.from("session-banners").getPublicUrl(path).data.publicUrl : null);
+
+export async function uploadBanner(file: File) {
+  if (file.size > 5 * 1024 * 1024) throw new Error("Banner must be under 5 MB");
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `${uid()}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from("session-banners").upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+/** RSVP; "going" also puts the session in the member's own calendar (and removes it otherwise). */
+export async function rsvp(s: GroupSession, status: "going" | "maybe" | "not_going", existing: { calendar_event_id: string | null } | undefined) {
+  const me = uid();
+  let calId = existing?.calendar_event_id ?? null;
+  if (status === "going" && !calId) {
+    const [ev] = await insertRows("calendar_events", { title: s.title, type: "workout", start_at: s.starts_at, end_at: s.ends_at, location: s.location, notes: [s.description, s.creator_name ? `Group session by ${s.creator_name}` : null].filter(Boolean).join("\n\n"), reminder_minutes: 60, source: "group", source_ref: s.id });
+    calId = ev.id;
+  } else if (status !== "going" && calId) {
+    await supabase.from("calendar_events").delete().eq("id", calId);
+    calId = null;
+    queryClient.invalidateQueries({ queryKey: ["rows", "calendar_events"] });
+  }
+  const { error } = await supabase.from("session_rsvps").upsert({ session_id: s.id, user_id: me, status, calendar_event_id: calId }, { onConflict: "session_id,user_id" });
+  if (error) throw error;
+  queryClient.invalidateQueries({ queryKey: ["rows", "session_rsvps"] });
 }

@@ -126,7 +126,7 @@ async function write(item: Omit<QueueItem, "qid">) {
 }
 
 // tables whose rows aren't owned through a user_id column (ownership is expressed differently)
-const NO_USER_ID = new Set(["profiles", "assignment_messages", "assignments", "notifications"]);
+const NO_USER_ID = new Set(["profiles", "assignment_messages", "assignments", "notifications", "group_sessions"]);
 const withOwner = <T extends Record<string, unknown>>(table: string, r: T) =>
   table === "profiles" ? r : ({ id: crypto.randomUUID(), ...(NO_USER_ID.has(table) ? {} : { user_id: uid() }), ...r } as T & { id: string; user_id: string });
 
