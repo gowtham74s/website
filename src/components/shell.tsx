@@ -6,6 +6,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useSession } from "@/lib/auth";
 import { useSyncState } from "@/lib/data";
 import { useProfile } from "@/lib/hooks";
+import { NotificationBell } from "./coaching";
+import { Inbox, Megaphone, ShieldCheck } from "lucide-react";
 import { cx, Spinner } from "./ui";
 import { FoodLogSheet, HabitQuickSheet, WeightSheet, useAddWater } from "./loggers";
 import { ReminderEngine } from "./reminders";
@@ -93,6 +95,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { session, loading } = useSession();
   const { profile } = useProfile();
+  const role = profile?.role ?? "user";
+  const ROLE_NAV = [
+    { href: "/inbox", label: "Inbox", icon: Inbox },
+    ...(role === "coach" || role === "admin" ? [{ href: "/coach", label: "Coach", icon: Megaphone }] : []),
+    ...(role === "admin" ? [{ href: "/admin", label: "Admin", icon: ShieldCheck }] : []),
+  ];
   const [qa, setQa] = useState(false);
 
   useEffect(() => { if (!loading && !session) router.replace("/login"); }, [loading, session, router]);
@@ -118,6 +126,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <img src="/icons/icon.svg" alt="" className="size-8 rounded-lg" />
           <span className="font-display text-lg font-semibold tracking-tight">Forge</span>
         </Link>
+        <div className="-mt-14 mb-6 flex justify-end px-1"><NotificationBell /></div>
         <nav className="flex flex-col gap-0.5">
           {NAV.map((n) => (
             <Link key={n.href} href={n.href} className={cx("flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition", isActive(path, n.href) ? "bg-card-2 text-fg ring-1 ring-line" : "text-muted hover:bg-card hover:text-fg")}>
@@ -125,7 +134,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           ))}
           <div className="mx-3 my-3 h-px bg-line" />
-          {MORE.map((n) => (
+          {[...ROLE_NAV, ...MORE].map((n) => (
             <Link key={n.href} href={n.href} className={cx("flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition", isActive(path, n.href) ? "bg-card-2 text-fg ring-1 ring-line" : "text-muted hover:bg-card hover:text-fg")}>
               <n.icon className="size-[18px]" />{n.label}
             </Link>
@@ -142,6 +151,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Link href="/" className="flex items-center gap-2"><img src="/icons/icon.svg" alt="" className="size-7 rounded-lg" /><span className="font-display font-semibold tracking-tight">Forge</span></Link>
         <div className="flex items-center gap-1">
           <SyncPill />
+          <NotificationBell />
+          {(role === "coach" || role === "admin") && <Link href="/coach" aria-label="Coach" className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><Megaphone className="size-5" /></Link>}
           <Link href="/assistant" aria-label="AI assistant" className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><Sparkles className="size-5" /></Link>
           <Link href="/analytics" aria-label="Analytics" className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><BarChart3 className="size-5" /></Link>
           <Link href="/settings" aria-label="Settings" className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><Settings className="size-5" /></Link>

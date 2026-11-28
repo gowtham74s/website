@@ -7,7 +7,7 @@ import { useSession } from "@/lib/auth";
 import { expandEvents, dateKey } from "@/lib/calc";
 import { updateById, useRows } from "@/lib/data";
 import { useProfile } from "@/lib/hooks";
-import type { CalendarEvent, HydrationLog, Reminder } from "@/lib/types";
+import type { AppNotification, CalendarEvent, HydrationLog, Reminder } from "@/lib/types";
 
 const toMin = (t: string | null) => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
 const inWindow = (now: number, a: number | null, b: number | null) => (a == null || b == null ? true : a <= b ? now >= a && now <= b : now >= a || now <= b);
@@ -31,6 +31,15 @@ export function ReminderEngine() {
   const t = dateKey();
   const water = useRows<HydrationLog>({ table: "hydration_logs", filters: [["date", "eq", t]] }, !!session);
   const events = useRows<CalendarEvent>({ table: "calendar_events", filters: [["reminder_minutes", "gte", 0]] }, !!session);
+  const inbox = useRows<AppNotification>({ table: "notifications", order: [["created_at", false]], limit: 20 }, !!session, { refetchInterval: 60_000, staleTime: 0 });
+  // New coach messages / reminders → system notification (only while the app is open; respects the on/off switch).
+  useEffect(() => {
+    if (!inbox.rows.length || !profile?.notification_settings?.enabled) return;
+    let seen = ""; try { seen = localStorage.getItem("forge-notif-seen") || ""; } catch { /* ignore */ }
+    const fresh = inbox.rows.filter((n) => !n.read_at && n.created_at > seen);
+    if (seen) fresh.slice(0, 3).forEach((n) => notify(n.title, n.body ?? "", n.link ?? "/inbox"));
+    try { localStorage.setItem("forge-notif-seen", inbox.rows[0].created_at); } catch { /* ignore */ }
+  }, [inbox.rows, profile?.notification_settings?.enabled]);
   const fired = useRef<number[]>([]);
   const state = useRef({ reminders: reminders.rows, water: water.rows, events: events.rows, profile });
   state.current = { reminders: reminders.rows, water: water.rows, events: events.rows, profile };

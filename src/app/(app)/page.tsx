@@ -14,6 +14,7 @@ import { ActivitySheet, CheckInSheet, FoodLogSheet, SleepSheet, toggleHabit, use
 import { EVENT_COLORS } from "@/components/event-colors";
 import { StageBar, hasStages } from "@/components/sleep-viz";
 import { TrendTiles, WeekStrip } from "@/components/dashboard-viz";
+import { CoachInboxCard } from "@/components/coaching";
 import type { ScoreKey } from "@/lib/types";
 
 const PART_HREF: Record<ScoreKey, string> = { workout: "/workout", nutrition: "/nutrition", protein: "/nutrition", water: "/hydration", walk: "/activity", sleep: "/sleep", habits: "/habits" };
@@ -132,6 +133,8 @@ export default function Dashboard() {
           </div>
         </div>
       </Card>
+
+      {!isPast && <CoachInboxCard />}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {/* Workout */}

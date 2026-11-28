@@ -1,5 +1,7 @@
 // Row types mirroring supabase/migrations. Kept hand-written so the app compiles without codegen.
 
+export type Role = "user" | "coach" | "admin";
+
 export type ScoreKey = "workout" | "nutrition" | "protein" | "water" | "walk" | "sleep" | "habits";
 
 export interface Profile {
@@ -38,6 +40,7 @@ export interface Profile {
   notification_settings: { enabled: boolean; quiet_start: string; quiet_end: string; max_per_hour: number };
   google_calendar: { connected?: boolean; calendar_id?: string; last_sync?: string };
   onboarded: boolean;
+  role?: Role;
 }
 
 interface Owned { id: string; user_id: string; is_demo?: boolean }
@@ -177,4 +180,23 @@ export type TableName =
   | "profiles" | "goals" | "exercises" | "workout_plans" | "plan_exercises" | "workouts" | "workout_sets" | "foods"
   | "food_favorites" | "recipes" | "recipe_ingredients" | "meals" | "nutrition_logs" | "meal_plan_entries"
   | "hydration_logs" | "activity_logs" | "sleep_logs" | "recovery_logs" | "habits" | "habit_logs" | "calendar_events"
-  | "body_measurements" | "progress_photos" | "reminders" | "transformation_programs" | "ai_messages" | "health_daily";
+  | "body_measurements" | "progress_photos" | "reminders" | "transformation_programs" | "ai_messages" | "health_daily" | "assignments" | "assignment_messages" | "notifications";
+
+export type AssignmentStatus = "assigned" | "accepted" | "done" | "change_requested" | "declined" | "cancelled";
+export interface Assignment {
+  id: string; coach_id: string; coach_name: string | null; user_id: string; title: string; type: EventType; details: string | null;
+  date: string; start_time: string | null; duration_min: number | null; status: AssignmentStatus; calendar_event_id: string | null;
+  created_at: string; updated_at: string;
+}
+export interface AssignmentMessage {
+  id: string; assignment_id: string; author_id: string; body: string | null; created_at: string; rating: number | null;
+  proposal: { date?: string; start_time?: string | null; duration_min?: number | null; title?: string; details?: string } | null;
+}
+export interface AppNotification {
+  id: string; user_id: string; sender_id: string | null; kind: string; title: string; body: string | null; link: string | null; read_at: string | null; created_at: string;
+}
+export interface CoachRow {
+  user_id: string; name: string | null; role: Role; steps: number; walk_km: number; water_ml: number; water_target: number; sleep_min: number | null;
+  sleep_target: number; calories: number; calorie_target: number; protein: number; protein_target: number; walk_target: number; steps_target: number;
+  workout_done: boolean; resting_hr: number | null; stress_avg: number | null; open_assignments: number; last_log: string | null;
+}

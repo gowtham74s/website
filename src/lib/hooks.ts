@@ -22,7 +22,8 @@ export const DEFAULT_PROFILE: Omit<Profile, "id"> = {
 export function useProfile() {
   const { session } = useSession();
   const id = session?.user.id;
-  const q = useRows<Profile>({ table: "profiles", filters: [["id", "eq", id]] }, !!id);
+  // always revalidated on mount (cached copy shows instantly) so role changes by an admin apply right away
+  const q = useRows<Profile>({ table: "profiles", filters: [["id", "eq", id]] }, !!id, { staleTime: 0, refetchInterval: 120_000 });
   const raw = q.rows[0];
   // stay null until the real row arrives, so defaults (e.g. onboarded=false) never drive redirects
   const profile: Profile | null = id && raw ? ({ ...DEFAULT_PROFILE, ...raw, id } as Profile) : null;

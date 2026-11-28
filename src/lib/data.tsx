@@ -42,8 +42,8 @@ async function fetchRows<T>(q: RowQuery): Promise<T[]> {
   return data as T[];
 }
 
-export function useRows<T>(q: RowQuery, enabled = true) {
-  const r = useQuery({ queryKey: keyOf(q), queryFn: () => fetchRows<T>(q), enabled });
+export function useRows<T>(q: RowQuery, enabled = true, opts?: { refetchInterval?: number; staleTime?: number }) {
+  const r = useQuery({ queryKey: keyOf(q), queryFn: () => fetchRows<T>(q), enabled, refetchInterval: opts?.refetchInterval, ...(opts?.staleTime !== undefined ? { staleTime: opts.staleTime } : {}) });
   return { ...r, rows: (r.data || []) as T[] };
 }
 
@@ -125,8 +125,10 @@ async function write(item: Omit<QueueItem, "qid">) {
   return { queued: false };
 }
 
+// tables whose rows aren't owned through a user_id column (ownership is expressed differently)
+const NO_USER_ID = new Set(["profiles", "assignment_messages", "assignments", "notifications"]);
 const withOwner = <T extends Record<string, unknown>>(table: string, r: T) =>
-  table === "profiles" ? r : ({ id: crypto.randomUUID(), user_id: uid(), ...r } as T & { id: string; user_id: string });
+  table === "profiles" ? r : ({ id: crypto.randomUUID(), ...(NO_USER_ID.has(table) ? {} : { user_id: uid() }), ...r } as T & { id: string; user_id: string });
 
 export async function insertRows<T extends Record<string, unknown>>(table: TableName, rows: T | T[]) {
   const list = (Array.isArray(rows) ? rows : [rows]).map((r) => withOwner(table, r) as T & { id: string; user_id: string });
