@@ -7,7 +7,8 @@ import { useSession } from "@/lib/auth";
 import { useSyncState } from "@/lib/data";
 import { useProfile } from "@/lib/hooks";
 import { NotificationBell } from "./coaching";
-import { Inbox, Megaphone, ShieldCheck } from "lucide-react";
+import { Inbox, Megaphone, Menu, ShieldCheck } from "lucide-react";
+import { Sheet } from "./ui";
 import { cx, Spinner } from "./ui";
 import { FoodLogSheet, HabitQuickSheet, WeightSheet, useAddWater } from "./loggers";
 import { ReminderEngine } from "./reminders";
@@ -102,6 +103,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     ...(role === "admin" ? [{ href: "/admin", label: "Admin", icon: ShieldCheck }] : []),
   ];
   const [qa, setQa] = useState(false);
+  const [menu, setMenu] = useState(false);
+  useEffect(() => setMenu(false), [path]);
 
   useEffect(() => { if (!loading && !session) router.replace("/login"); }, [loading, session, router]);
   useEffect(() => {
@@ -153,9 +156,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <SyncPill />
           <NotificationBell />
           {(role === "coach" || role === "admin") && <Link href="/coach" aria-label="Coach" className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><Megaphone className="size-5" /></Link>}
-          <Link href="/assistant" aria-label="AI assistant" className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><Sparkles className="size-5" /></Link>
-          <Link href="/analytics" aria-label="Analytics" className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><BarChart3 className="size-5" /></Link>
-          <Link href="/settings" aria-label="Settings" className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><Settings className="size-5" /></Link>
+          {role === "admin" && <Link href="/admin" aria-label="Admin" className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><ShieldCheck className="size-5" /></Link>}
+          <button aria-label="Menu — all pages" onClick={() => setMenu(true)} className="grid size-9 place-items-center rounded-xl text-muted hover:text-fg"><Menu className="size-5" /></button>
         </div>
       </header>
 
@@ -174,6 +176,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       <button aria-label="Quick log" onClick={() => setQa(true)} className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] right-4 z-40 grid size-14 place-items-center rounded-2xl bg-good text-black shadow-[0_10px_30px_-8px_rgba(16,185,129,.6)] transition active:scale-90 lg:hidden">
         <Plus className="size-7" strokeWidth={2.4} />
       </button>
+      <Sheet open={menu} onClose={() => setMenu(false)} title="All pages">
+        <div className="grid grid-cols-3 gap-2">
+          {[...NAV, ...ROLE_NAV, ...MORE].map((n) => (
+            <Link key={n.href} href={n.href} className={cx("flex flex-col items-center gap-1.5 rounded-2xl border px-2 py-3 text-center text-xs font-medium transition active:scale-95", isActive(path, n.href) ? "border-good/40 bg-good-soft text-good" : "border-line bg-bg-2 text-fg", (n.href === "/admin" || n.href === "/coach") && !isActive(path, n.href) && "border-info/40")}>
+              <n.icon className="size-5" />{n.label}
+            </Link>
+          ))}
+        </div>
+        <p className="mt-3 text-center text-xs text-faint">Signed in as {role}{role !== "user" ? " — Coach and Admin pages are in this menu" : ""}.</p>
+      </Sheet>
       <QuickActions open={qa} onClose={() => setQa(false)} />
       <ReminderEngine />
       <AutoHabits />

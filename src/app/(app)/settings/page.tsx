@@ -1,5 +1,6 @@
 "use client";
 import { Bell, BellOff, Download, FlaskConical, LogOut, Moon, Plus, Shield, Sun, Trash2, Monitor, AlarmClock, CalendarDays } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signOut, useSession } from "@/lib/auth";
@@ -67,6 +68,15 @@ export default function SettingsPage() {
   return (
     <div className="anim-rise pb-20">
       <PageHeader title="Settings" sub={session?.user.email} action={dirty && <Button variant="good" onClick={save}>Save changes</Button>} />
+
+      <Card className="mb-6 flex flex-wrap items-center gap-3 p-4">
+        <span className={cx("grid size-10 place-items-center rounded-xl", p.role === "admin" ? "bg-bad-soft text-bad" : p.role === "coach" ? "bg-info/15 text-info" : "bg-card-2 text-muted")}><Shield className="size-5" /></span>
+        <div className="min-w-0 flex-1 text-sm"><div className="font-medium">Your role: <span className="capitalize">{p.role ?? "user"}</span></div><div className="text-muted">{p.role === "admin" ? "You can switch anyone between user, coach and admin, and coach users." : p.role === "coach" ? "You can send events to users, see their daily progress and remind them." : "An admin can make you a coach."}</div></div>
+        <div className="flex gap-2">
+          {(p.role === "coach" || p.role === "admin") && <Link href="/coach"><Button size="sm">Coach page</Button></Link>}
+          {p.role === "admin" && <Link href="/admin"><Button size="sm" variant="good">Manage roles</Button></Link>}
+        </div>
+      </Card>
 
       <Section title="Profile">
         <Card className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
