@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  estimateActiveCalories, activeCalories, strideKm,
+  estimateActiveCalories, activeCalories, strideKm, totalSteps,
   scaleFood, sumMacros, recipeNutrition, walkDistance, sleepMinutes, readiness, isPersonalRecord, suggestOverload,
   habitStreaks, rollingAverage, trendPerWeek, dayScore, programDay, expandEvents, findConflicts, addDays, calorieScore,
 } from "../calc.ts";
@@ -129,4 +129,17 @@ test("active calories prefer recorded values and avoid double counting", () => {
   assert.equal(r.estimated, 228); // 6.5 × 70 × 0.5h
   assert.equal(r.total, 1700 + 538);
   assert.equal(activeCalories([rows[2]], 70).total, null);
+});
+
+test("watch wins: hand-logged walks on a watch day are listed but not double counted", () => {
+  const day: any[] = [
+    { date: "2026-11-27", type: "walk", source: "samsung", steps: 8000, distance_km: 6, active_calories: 300 },
+    { date: "2026-11-27", type: "walk", source: "manual", steps: 2000, distance_km: 1.5, active_calories: 0, duration_min: 20 },
+    { date: "2026-11-27", type: "cycle", source: "manual", steps: 0, distance_km: 10, active_calories: 0, duration_min: 30 },
+  ];
+  assert.equal(walkDistance(day), 6);
+  assert.equal(totalSteps(day), 8000);
+  assert.equal(activeCalories(day, 70).active, 300 + 228); // cycling still adds (6.5 × 70 × 0.5h)
+  // without watch data the manual walk counts normally
+  assert.equal(walkDistance([day[1]]), 1.5);
 });

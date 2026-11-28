@@ -2,7 +2,7 @@
 import { Flame, Footprints, MapPin, Pause, Play, Plus, Square, Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { activeCalories, addDays, avg, estimateActiveCalories, remaining, startOfWeekKey, totalSteps, walkDistance } from "@/lib/calc";
+import { activeCalories, addDays, avg, coveredByWatch, estimateActiveCalories, remaining, startOfWeekKey, totalSteps, walkDistance } from "@/lib/calc";
 import { deleteById, insertRows, useRows } from "@/lib/data";
 import { today, useProfile } from "@/lib/hooks";
 import type { ActivityLog } from "@/lib/types";
@@ -80,7 +80,7 @@ function ActivityPage() {
         {logs.rows.length ? <Card className="divide-y divide-line">{logs.rows.slice(0, 20).map((l) => (
           <div key={l.id} className="flex items-center gap-3 px-4 py-3">
             <Footprints className="size-4 text-info" />
-            <div className="min-w-0 flex-1"><div className="text-sm font-medium capitalize">{l.source === "samsung" ? "Daily steps" : l.source === "samsung_workout" && l.notes ? l.notes : l.type} · {Number(l.distance_km)} km{l.is_demo && <Badge className="ml-2">Demo</Badge>}</div><div className="num text-xs text-faint">{new Date(`${l.date}T12:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })} · {l.duration_min} min{l.steps ? ` · ${l.steps.toLocaleString()} steps` : ""} · {l.active_calories || `~${estimateActiveCalories(l, profile.weight_kg, profile.height_cm).kcal}`} kcal{l.avg_hr ? ` · ♥ ${l.avg_hr}${l.max_hr ? `/${l.max_hr}` : ""} bpm` : ""}{l.source === "gps" ? " · GPS" : l.source?.startsWith("samsung") ? " · Samsung Health" : ""}</div></div>
+            <div className="min-w-0 flex-1"><div className="text-sm font-medium capitalize">{l.source === "samsung" ? "Daily steps" : l.source === "samsung_workout" && l.notes ? l.notes : l.type} · {Number(l.distance_km)} km{l.is_demo && <Badge className="ml-2">Demo</Badge>}</div><div className="num text-xs text-faint">{new Date(`${l.date}T12:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })} · {l.duration_min} min{l.steps ? ` · ${l.steps.toLocaleString()} steps` : ""} · {l.active_calories || `~${estimateActiveCalories(l, profile.weight_kg, profile.height_cm).kcal}`} kcal{coveredByWatch(l, logs.rows) ? " · included in watch total" : ""}{l.avg_hr ? ` · ♥ ${l.avg_hr}${l.max_hr ? `/${l.max_hr}` : ""} bpm` : ""}{l.source === "gps" ? " · GPS" : l.source?.startsWith("samsung") ? " · Samsung Health" : ""}</div></div>
             <IconButton label="Delete" onClick={() => act(() => deleteById("activity_logs", l.id), "Removed")}><Trash2 className="size-4" /></IconButton>
           </div>
         ))}</Card> : <p className="text-sm text-muted">No activity logged yet.</p>}

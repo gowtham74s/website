@@ -64,14 +64,23 @@ export const pct = (v: number, t: number) => (t > 0 ? Math.min(100, Math.round((
 // ---------------------------------------------------------------- activity
 export const STEP_KM = 0.000762; // average stride ≈ 0.76 m
 /** Walking distance for the day: logged km, or estimated from steps when only steps were logged. */
+/**
+ * "Watch wins" for step-based activity: when a watch daily total (Samsung import) exists for a day, it already
+ * includes that day's walks and runs — so watch workout rows and hand-logged walks/runs/hikes are kept in the list
+ * but not added to distance, steps or calories again. Other activities (cycling, swimming, …) still add.
+ */
+export const STEP_TYPES = ["walk", "run", "hike"];
+export function coveredByWatch(r: ActivityLog, dayRows: ActivityLog[]) {
+  if (r.source === "samsung" || !dayRows.some((x) => x.source === "samsung" && x.date === r.date)) return false;
+  return r.source === "samsung_workout" || STEP_TYPES.includes(r.type);
+}
+const counted = (rows: ActivityLog[]) => rows.filter((r) => !coveredByWatch(r, rows));
+
 export function walkDistance(rows: ActivityLog[]) {
-  // When a Samsung daily step total exists for the day it already covers that day's walks,
-  // so the individual Samsung workout rows are not added on top.
-  const hasDaily = rows.some((r) => r.source === "samsung");
-  return round1(rows.filter((r) => ["walk", "run", "hike"].includes(r.type) && !(hasDaily && r.source === "samsung_workout"))
+  return round1(counted(rows).filter((r) => STEP_TYPES.includes(r.type))
     .reduce((a, r) => a + (Number(r.distance_km) > 0 ? Number(r.distance_km) : (r.steps || 0) * STEP_KM), 0) * 10) / 10;
 }
-export const totalSteps = (rows: ActivityLog[]) => rows.reduce((a, r) => a + (r.steps || 0), 0);
+export const totalSteps = (rows: ActivityLog[]) => counted(rows).reduce((a, r) => a + (r.steps || 0), 0);
 
 // ---------------------------------------------------------------- calories burned from activity
 /** Stride length in km from height (walking ≈ 0.415 × height, running ≈ 0.65 × height). */
@@ -106,10 +115,8 @@ export function estimateActiveCalories(a: { type: string; distance_km?: number |
 
 /** Active calories for a set of activity rows: recorded values first (watch/manual), estimates for the rest. */
 export function activeCalories(rows: ActivityLog[], weightKg: number | null | undefined, heightCm?: number | null) {
-  const hasDaily = rows.some((r) => r.source === "samsung");
   let recorded = 0, estimated = 0;
-  for (const r of rows) {
-    if (hasDaily && r.source === "samsung_workout") continue; // already inside the watch's daily total
+  for (const r of counted(rows)) {
     if (r.active_calories > 0) recorded += r.active_calories;
     else estimated += estimateActiveCalories(r, weightKg, heightCm).kcal;
   }

@@ -8,7 +8,7 @@ import { addDays, dateKey } from "@/lib/calc";
 import { queryClient, uid } from "@/lib/data";
 import { isSamsungFile, parseSamsungExport, type SamsungData } from "@/lib/samsung";
 import { supabase } from "@/lib/supabase";
-import { Button, Card, Metric, Segmented, Sheet, useToast } from "./ui";
+import { Button, Card, cx, Metric, Segmented, Sheet, useToast } from "./ui";
 
 const chunk = <T,>(a: T[], n = 400) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
 
@@ -27,6 +27,20 @@ async function readFiles(list: FileList) {
     }
   }
   return { files: out, chosen };
+}
+
+type Cats = { steps: boolean; workouts: boolean; sleep: boolean; vitals: boolean; water: boolean; weight: boolean };
+const CATS_KEY = "forge-samsung-cats";
+const ALL_CATS: Cats = { steps: true, workouts: true, sleep: true, vitals: true, water: true, weight: true };
+const loadCats = (): Cats => { try { return { ...ALL_CATS, ...JSON.parse(localStorage.getItem(CATS_KEY) || "{}") }; } catch { return ALL_CATS; } };
+const CAT_LABELS: [keyof Cats, string, string][] = [
+  ["steps", "Steps, distance & calories", "daily totals from the watch"], ["workouts", "Workouts", "with heart rate"],
+  ["sleep", "Sleep", "stages, score, snoring, SpO₂"], ["vitals", "Vitals", "heart rate, stress, SpO₂, floors"],
+  ["water", "Water", "untick if you log water in Forge"], ["weight", "Weight & height", ""],
+];
+/** Keep only the categories the user chose to import. */
+function pickCats(d: SamsungData, c: Cats): SamsungData {
+  return { ...d, steps: c.steps ? d.steps : [], exercises: c.workouts ? d.exercises : [], sleep: c.sleep ? d.sleep : [], vitals: c.vitals ? d.vitals : [], water: c.water ? d.water : [], weight: c.weight ? d.weight : [] };
 }
 
 function inRange(d: SamsungData, days: number | null): SamsungData {
@@ -54,6 +68,8 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
   const input = useRef<HTMLInputElement>(null);
   const [parsed, setParsed] = useState<SamsungData | null>(null);
   const [range, setRange] = useState<"30" | "90" | "365" | "all">("90");
+  const [cats, setCatsState] = useState<Cats>(loadCats);
+  const setCats = (c: Cats) => { setCatsState(c); try { localStorage.setItem(CATS_KEY, JSON.stringify(c)); } catch { /* ignore */ } };
   const [busy, setBusy] = useState<"read" | "save" | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const data = parsed ? inRange(parsed, range === "all" ? null : Number(range)) : null;
@@ -77,6 +93,7 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
 
   const save = async () => {
     if (!data) return;
+    const sel = pickCats(data, cats);
     if (!navigator.onLine) return toast("Importing needs an internet connection.", { tone: "bad" });
     setBusy("save");
     try {
@@ -85,58 +102,58 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
       const run = async (p: PromiseLike<{ error: { message: string } | null }>) => { const { error } = await p; if (error) throw new Error(error.message); };
 
       // Daily steps & distance — replace earlier Samsung rows for the same days (re-import safe).
-      for (const c of chunk(dates(data.steps))) await run(supabase.from("activity_logs").delete().eq("source", "samsung").in("date", c));
-      for (const c of chunk(data.steps.map((s) => ({ user_id, date: s.date, type: "walk", steps: s.steps, distance_km: s.distance_km, duration_min: s.active_min, active_calories: s.calories, resting_calories: s.resting_calories, source: "samsung", notes: "Samsung Health daily steps", logged_at: new Date(`${s.date}T23:59:00`).toISOString() }))))
+      for (const c of chunk(dates(sel.steps))) await run(supabase.from("activity_logs").delete().eq("source", "samsung").in("date", c));
+      for (const c of chunk(sel.steps.map((s) => ({ user_id, date: s.date, type: "walk", steps: s.steps, distance_km: s.distance_km, duration_min: s.active_min, active_calories: s.calories, resting_calories: s.resting_calories, source: "samsung", notes: "Samsung Health daily steps", logged_at: new Date(`${s.date}T23:59:00`).toISOString() }))))
         await run(supabase.from("activity_logs").insert(c));
 
       // Workouts — replaced the same way.
-      for (const c of chunk(dates(data.exercises))) await run(supabase.from("activity_logs").delete().eq("source", "samsung_workout").in("date", c));
-      for (const c of chunk(data.exercises.map((e) => ({ user_id, date: e.date, type: e.type, steps: 0, distance_km: e.distance_km, duration_min: e.duration_min, active_calories: e.calories, source: "samsung_workout", notes: e.label, logged_at: e.start, avg_hr: e.avg_hr, max_hr: e.max_hr }))))
+      for (const c of chunk(dates(sel.exercises))) await run(supabase.from("activity_logs").delete().eq("source", "samsung_workout").in("date", c));
+      for (const c of chunk(sel.exercises.map((e) => ({ user_id, date: e.date, type: e.type, steps: 0, distance_km: e.distance_km, duration_min: e.duration_min, active_calories: e.calories, source: "samsung_workout", notes: e.label, logged_at: e.start, avg_hr: e.avg_hr, max_hr: e.max_hr }))))
         await run(supabase.from("activity_logs").insert(c));
 
       // Sleep & weight — only fill days you haven't logged yet (never overwrite your own entries).
       let sleepAdded = 0, weightAdded = 0, waterAdded = 0, vitalsAdded = 0;
       // Water — skip glasses already imported (matched by timestamp to the second).
-      if (data.water.length) {
-        const { data: ex, error } = await supabase.from("hydration_logs").select("logged_at").gte("date", data.water[0].date);
+      if (sel.water.length) {
+        const { data: ex, error } = await supabase.from("hydration_logs").select("logged_at").gte("date", sel.water[0].date);
         if (error) throw error;
         const have = new Set((ex || []).map((r) => new Date(r.logged_at).toISOString().slice(0, 19)));
-        const rows = data.water.filter((w) => !have.has(w.logged_at.slice(0, 19))).map((w) => ({ user_id, ...w }));
+        const rows = sel.water.filter((w) => !have.has(w.logged_at.slice(0, 19))).map((w) => ({ user_id, ...w }));
         for (const c of chunk(rows)) await run(supabase.from("hydration_logs").insert(c));
         waterAdded = rows.length;
       }
       // Sleep — watch nights replace earlier Samsung imports; nights you logged by hand are kept.
-      if (data.sleep.length) {
-        for (const c of chunk(dates(data.sleep))) await run(supabase.from("sleep_logs").delete().eq("source", "samsung").in("date", c));
-        const { data: ex, error } = await supabase.from("sleep_logs").select("date").gte("date", data.sleep[0].date);
+      if (sel.sleep.length) {
+        for (const c of chunk(dates(sel.sleep))) await run(supabase.from("sleep_logs").delete().eq("source", "samsung").in("date", c));
+        const { data: ex, error } = await supabase.from("sleep_logs").select("date").gte("date", sel.sleep[0].date);
         if (error) throw error;
         const have = new Set((ex || []).map((r) => r.date));
-        const rows = data.sleep.filter((s) => !have.has(s.date)).map((s) => ({ user_id, ...s, source: "samsung", notes: "Samsung Health" }));
+        const rows = sel.sleep.filter((s) => !have.has(s.date)).map((s) => ({ user_id, ...s, source: "samsung", notes: "Samsung Health" }));
         for (const c of chunk(rows)) await run(supabase.from("sleep_logs").insert(c));
         sleepAdded = rows.length;
       }
       // Daily vitals — one row per day, updated in place on re-import.
-      if (data.vitals.length) {
-        for (const c of chunk(data.vitals.map((v) => ({ user_id, ...v, source: "samsung" }))))
+      if (sel.vitals.length) {
+        for (const c of chunk(sel.vitals.map((v) => ({ user_id, ...v, source: "samsung" }))))
           await run(supabase.from("health_daily").upsert(c, { onConflict: "user_id,date" }));
-        vitalsAdded = data.vitals.length;
+        vitalsAdded = sel.vitals.length;
       }
-      if (parsed?.heightCm) {
+      if (cats.weight && parsed?.heightCm) {
         const { data: pr } = await supabase.from("profiles").select("height_cm").eq("id", user_id).single();
         if (!pr?.height_cm) await run(supabase.from("profiles").update({ height_cm: parsed.heightCm }).eq("id", user_id));
       }
-      if (data.weight.length) {
-        const { data: ex, error } = await supabase.from("body_measurements").select("date").gte("date", data.weight[0].date);
+      if (sel.weight.length) {
+        const { data: ex, error } = await supabase.from("body_measurements").select("date").gte("date", sel.weight[0].date);
         if (error) throw error;
         const have = new Set((ex || []).map((r) => r.date));
-        const rows = data.weight.filter((w) => !have.has(w.date)).map((w) => ({ user_id, ...w, notes: "Samsung Health" }));
+        const rows = sel.weight.filter((w) => !have.has(w.date)).map((w) => ({ user_id, ...w, notes: "Samsung Health" }));
         for (const c of chunk(rows)) await run(supabase.from("body_measurements").insert(c));
         weightAdded = rows.length;
-        const latest = data.weight[data.weight.length - 1];
+        const latest = sel.weight[sel.weight.length - 1];
         if (latest.date >= addDays(dateKey(), -7)) await run(supabase.from("profiles").update({ weight_kg: latest.weight_kg }).eq("id", user_id));
       }
       queryClient.invalidateQueries(); // refresh in the background
-      const msg = `Imported ${data.steps.length} days of steps & calories, ${data.exercises.length} workouts, ${sleepAdded} nights of sleep, ${vitalsAdded} days of heart rate / stress / SpO₂ / floors, ${waterAdded} water entries and ${weightAdded} weigh-ins.`;
+      const msg = `Imported ${sel.steps.length} days of steps & calories, ${sel.exercises.length} workouts, ${sleepAdded} nights of sleep, ${vitalsAdded} days of heart rate / stress / SpO₂ / floors, ${waterAdded} water entries and ${weightAdded} weigh-ins.`;
       setResult(msg); toast("Samsung Health data imported");
     } catch (e) { toast(`Import failed: ${(e as Error).message}`, { tone: "bad" }); }
     setBusy(null);
@@ -145,7 +162,7 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
   const close = () => { setParsed(null); setResult(null); onClose(); };
 
   return (
-    <Sheet open={open} onClose={close} title="Import from Samsung Health" footer={data && !result ? <Button variant="good" size="lg" className="w-full" loading={busy === "save"} onClick={save}>Import {range === "all" ? "everything" : `last ${range} days`}</Button> : result ? <Button size="lg" className="w-full" onClick={close}>Done</Button> : undefined}>
+    <Sheet open={open} onClose={close} title="Import from Samsung Health" footer={data && !result ? <Button variant="good" size="lg" className="w-full" loading={busy === "save"} disabled={!Object.values(cats).some(Boolean)} onClick={save}>Import {range === "all" ? "everything" : `last ${range} days`}</Button> : result ? <Button size="lg" className="w-full" onClick={close}>Done</Button> : undefined}>
       {result ? (
         <div className="py-4 text-center"><CheckCircle2 className="mx-auto mb-3 size-10 text-good" /><p className="text-[15px]">{result}</p><p className="mt-2 text-sm text-muted">See it on the Activity, Sleep and Progress pages. Import again any time — repeated imports don't create duplicates.</p></div>
       ) : (
@@ -161,6 +178,18 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
           {data && (
             <>
               <div className="flex items-center justify-between gap-2"><span className="text-sm text-muted">Import range</span><Segmented size="sm" value={range} onChange={setRange} options={[{ value: "30", label: "30d" }, { value: "90", label: "90d" }, { value: "365", label: "1y" }, { value: "all", label: "All" }]} /></div>
+              <div>
+                <div className="mb-1.5 text-sm text-muted">What to import</div>
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {CAT_LABELS.map(([k, label, hint]) => (
+                    <label key={k} className={cx("flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2 text-sm", cats[k] ? "border-good/40 bg-good-soft" : "border-line bg-bg-2 text-muted")}>
+                      <input type="checkbox" className="mt-0.5 size-4 accent-[var(--good)]" checked={cats[k]} onChange={(e) => setCats({ ...cats, [k]: e.target.checked })} />
+                      <span><span className="font-medium text-fg">{label}</span>{hint && <span className="block text-xs text-faint">{hint}</span>}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-xs text-faint">Your choices are remembered. Things you log by hand are never overwritten.</p>
+              </div>
               <div className="grid grid-cols-2 gap-3 rounded-2xl border border-line bg-bg-2 p-3">
                 <Metric label="Days of steps" value={data.steps.length} sub={data.steps.length ? `${data.steps[0].date} → ${data.steps[data.steps.length - 1].date}` : "none found"} />
                 <Metric label="Workouts" value={data.exercises.length} sub={data.exercises.length ? [...new Set(data.exercises.map((e) => e.label))].slice(0, 3).join(", ") : "none found"} />

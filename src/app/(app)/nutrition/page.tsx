@@ -20,7 +20,7 @@ function Inner() {
     <div className="anim-rise">
       <PageHeader title="Nutrition" sub="Targets adapt to training and rest days." />
       <Segmented className="mb-5" value={tab} onChange={setTab} options={[{ value: "day", label: "Log" }, { value: "plan", label: "Meal plan" }, { value: "library", label: "Library" }, { value: "trends", label: "Trends" }]} />
-      {tab === "day" && <DayLog openLog={sp.get("log") === "1"} />}
+      {tab === "day" && <DayLog openLog={sp.get("log") === "1"} initialDate={sp.get("date") ?? undefined} />}
       {tab === "plan" && <MealPlan />}
       {tab === "library" && <Library />}
       {tab === "trends" && <Trends />}
@@ -29,11 +29,11 @@ function Inner() {
 }
 
 // ---------------------------------------------------------------- daily log
-function DayLog({ openLog }: { openLog: boolean }) {
+function DayLog({ openLog, initialDate }: { openLog: boolean; initialDate?: string }) {
   const act = useAction();
   const toast = useToast();
   const { profile } = useProfile();
-  const [date, setDate] = useState(today());
+  const [date, setDate] = useState(initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) && initialDate <= today() ? initialDate : today());
   const [logCat, setLogCat] = useState<MealCategory | null>(openLog ? "lunch" : null);
   const [saveCat, setSaveCat] = useState<MealCategory | null>(null);
   const [editing, setEditing] = useState<NutritionLog | null>(null);
