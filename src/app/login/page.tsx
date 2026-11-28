@@ -9,7 +9,7 @@ import { Button, Field, Input, Segmented } from "@/components/ui";
 export default function Login() {
   const router = useRouter();
   const { session } = useSession();
-  const [mode, setMode] = useState<"signin" | "signup" | "magic">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "magic" | "forgot">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -20,6 +20,14 @@ export default function Login() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setMsg(null);
     const redirect = `${location.origin}/`;
+    if (mode === "forgot") {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${location.origin}/reset-password` });
+      setBusy(false);
+      if (error && /rate limit/i.test(error.message)) return setMsg({ tone: "bad", text: "Too many emails sent recently. Please try again in about an hour." });
+      if (error && !/not found|user/i.test(error.message)) return setMsg({ tone: "bad", text: error.message });
+      // same message whether or not the account exists, so emails can't be probed
+      return setMsg({ tone: "good", text: "If an account exists for that email, a reset link is on its way. Open it on this device to set a new password. Check spam if it doesn't arrive in a few minutes." });
+    }
     const res = mode === "signin" ? await supabase.auth.signInWithPassword({ email, password })
       : mode === "signup" ? await supabase.auth.signUp({ email, password, options: { data: { name }, emailRedirectTo: redirect } })
       : await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirect } });
@@ -53,17 +61,19 @@ export default function Login() {
       <div className="flex items-center justify-center px-5 py-12">
         <form onSubmit={submit} className="w-full max-w-sm anim-rise">
           <div className="mb-8 flex items-center gap-3 lg:hidden"><img src="/icons/icon.svg" alt="" className="size-10 rounded-xl" /><span className="font-display text-xl font-semibold">Forge</span></div>
-          <h2 className="font-display text-3xl font-semibold tracking-tight">{mode === "signup" ? "Create your account" : "Welcome back"}</h2>
-          <p className="mb-6 mt-1 text-sm text-muted">Your data is private to your account.</p>
-          <Segmented className="mb-5 w-full" value={mode} onChange={setMode} options={[{ value: "signin", label: "Sign in" }, { value: "signup", label: "Sign up" }, { value: "magic", label: "Email link" }]} />
+          <h2 className="font-display text-3xl font-semibold tracking-tight">{mode === "signup" ? "Create your account" : mode === "forgot" ? "Reset your password" : "Welcome back"}</h2>
+          <p className="mb-6 mt-1 text-sm text-muted">{mode === "forgot" ? "Enter your account email and we'll send you a link to set a new password." : "Your data is private to your account."}</p>
+          {mode !== "forgot" && <Segmented className="mb-5 w-full" value={mode} onChange={setMode} options={[{ value: "signin", label: "Sign in" }, { value: "signup", label: "Sign up" }, { value: "magic", label: "Email link" }]} />}
           <div className="space-y-3">
             {mode === "signup" && <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" /></Field>}
             <Field label="Email"><div className="relative"><Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" /><Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="pl-9" autoComplete="email" /></div></Field>
-            {mode !== "magic" && <Field label="Password"><div className="relative"><Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" /><Input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} className="pl-9" autoComplete={mode === "signup" ? "new-password" : "current-password"} /></div></Field>}
+            {(mode === "signin" || mode === "signup") && <Field label="Password"><div className="relative"><Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" /><Input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} className="pl-9" autoComplete={mode === "signup" ? "new-password" : "current-password"} /></div></Field>}
           </div>
+          {mode === "signin" && <button type="button" onClick={() => { setMode("forgot"); setMsg(null); }} className="mt-2 text-sm font-medium text-good hover:underline">Forgot password?</button>}
+          {mode === "forgot" && <button type="button" onClick={() => { setMode("signin"); setMsg(null); }} className="mt-2 text-sm text-muted hover:text-fg">← Back to sign in</button>}
           {mode === "magic" && <p className="mt-3 text-xs text-faint">Email links are limited to a few per hour. Signing in with a password never sends email.</p>}
           {msg && <p className={`mt-4 rounded-xl px-3 py-2 text-sm ${msg.tone === "good" ? "bg-good-soft text-good" : "bg-bad-soft text-bad"}`}>{msg.text}</p>}
-          <Button type="submit" variant="good" size="lg" className="mt-6 w-full" loading={busy}>{mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send link"}<ArrowRight className="size-4" /></Button>
+          <Button type="submit" variant="good" size="lg" className="mt-6 w-full" loading={busy}>{mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : mode === "forgot" ? "Send reset link" : "Send link"}<ArrowRight className="size-4" /></Button>
         </form>
       </div>
     </div>

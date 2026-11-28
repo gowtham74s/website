@@ -1,5 +1,5 @@
 "use client";
-import { Bell, BellOff, Download, FlaskConical, LogOut, Moon, Plus, Shield, Sun, Trash2, Monitor, AlarmClock, CalendarDays } from "lucide-react";
+import { KeyRound, Bell, BellOff, Download, FlaskConical, LogOut, Moon, Plus, Shield, Sun, Trash2, Monitor, AlarmClock, CalendarDays } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -29,6 +29,7 @@ export default function SettingsPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteText, setDeleteText] = useState("");
   const [demoConfirm, setDemoConfirm] = useState<null | "load" | "clear">(null);
+  const [pwOpen, setPwOpen] = useState(false);
   useEffect(() => { if (profile && !p) setP(profile); }, [profile, p]);
   if (!p || !profile) return null;
   const set = (patch: Partial<Profile>) => setP({ ...p, ...patch });
@@ -159,6 +160,7 @@ export default function SettingsPage() {
         <Card className="divide-y divide-line">
           <div className="flex items-center gap-3 p-4"><Shield className="size-5 text-good" /><div className="flex-1 text-sm text-muted">Every table is protected by row-level security — only your signed-in account can read or write your rows. Photos are in a private bucket served by expiring links. No API keys are exposed to the browser.</div></div>
           <div className="flex items-center gap-3 p-4"><Download className="size-5 text-muted" /><div className="flex-1 text-sm"><div className="font-medium">Export my data</div><div className="text-muted">All your rows as JSON.</div></div><Button size="sm" onClick={exportData} loading={busy === "export"}>Export</Button></div>
+          <div className="flex items-center gap-3 p-4"><KeyRound className="size-5 text-muted" /><div className="flex-1 text-sm"><div className="font-medium">Password</div><div className="text-muted">Change the password you sign in with.</div></div><Button size="sm" onClick={() => setPwOpen(true)}>Change</Button></div>
           <div className="flex items-center gap-3 p-4"><LogOut className="size-5 text-muted" /><div className="flex-1 text-sm font-medium">Sign out</div><Button size="sm" onClick={async () => { await signOut(); router.replace("/login"); }}>Sign out</Button></div>
           <div className="flex items-center gap-3 p-4"><Trash2 className="size-5 text-bad" /><div className="flex-1 text-sm"><div className="font-medium">Delete account</div><div className="text-muted">Permanently deletes your account, all logs and photos.</div></div><Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)}>Delete</Button></div>
         </Card>
@@ -166,6 +168,7 @@ export default function SettingsPage() {
 
       {dirty && <div className="safe-b fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-30 flex justify-center px-4 lg:bottom-6 lg:left-64"><Button variant="good" size="lg" className="shadow-2xl" onClick={save}>Save changes</Button></div>}
 
+      <ChangePasswordSheet open={pwOpen} onClose={() => setPwOpen(false)} />
       <Sheet open={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete your account?" footer={<Button variant="danger" className="w-full" disabled={deleteText !== "DELETE"} loading={busy === "delete"} onClick={deleteAccount}>Permanently delete everything</Button>}>
         <p className="text-sm text-muted">This removes your profile, every workout, meal, log, habit, event and photo. It cannot be undone. Consider exporting first.</p>
         <Field label='Type "DELETE" to confirm' className="mt-4"><Input value={deleteText} onChange={(e) => setDeleteText(e.target.value)} /></Field>
@@ -232,3 +235,28 @@ function Notifications({ p, set }: { p: Profile; set: (x: Partial<Profile>) => v
   );
 }
 
+
+function ChangePasswordSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const toast = useToast();
+  const [pw, setPw] = useState(""); const [pw2, setPw2] = useState(""); const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  const close = () => { setPw(""); setPw2(""); setErr(null); onClose(); };
+  const save = async () => {
+    setErr(null);
+    if (pw.length < 8) return setErr("Use at least 8 characters.");
+    if (pw !== pw2) return setErr("The two passwords don't match.");
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setBusy(false);
+    if (error) return setErr(/same/i.test(error.message) ? "That's your current password — choose a different one." : /reauth|recent/i.test(error.message) ? "For security, sign out and use 'Forgot password?' on the login screen to set a new one." : error.message);
+    toast("Password changed"); close();
+  };
+  return (
+    <Sheet open={open} onClose={close} title="Change password" footer={<Button variant="good" className="w-full" loading={busy} onClick={save}>Save new password</Button>}>
+      <div className="space-y-3">
+        <Field label="New password"><Input type="password" autoComplete="new-password" minLength={8} value={pw} onChange={(e) => { setPw(e.target.value); setErr(null); }} /></Field>
+        <Field label="Confirm new password" hint="At least 8 characters. Forgot your current one? Sign out and use 'Forgot password?' on the login screen."><Input type="password" autoComplete="new-password" value={pw2} onChange={(e) => { setPw2(e.target.value); setErr(null); }} /></Field>
+        {err && <p className="rounded-xl bg-bad-soft px-3 py-2 text-sm text-bad">{err}</p>}
+      </div>
+    </Sheet>
+  );
+}
