@@ -108,13 +108,23 @@ export interface HydrationLog extends Owned { date: string; amount_ml: number; l
 
 export type ActivityType = "walk" | "run" | "cycle" | "cardio" | "swim" | "hike" | "other";
 export interface ActivityLog extends Owned {
-  date: string; type: ActivityType; steps: number; distance_km: number; duration_min: number; active_calories: number; resting_calories?: number;
+  date: string; type: ActivityType; steps: number; distance_km: number; duration_min: number; active_calories: number; resting_calories?: number; avg_hr?: number | null; max_hr?: number | null;
   source: string; notes: string | null; logged_at: string;
 }
 
 export interface SleepLog extends Owned {
   date: string; bedtime: string; wake_time: string; duration_min: number; quality: number | null;
   refreshed: number | null; notes: string | null;
+  // detail from a watch (Samsung Health import); null when logged by hand
+  source?: string; score?: number | null; efficiency?: number | null; deep_min?: number | null; light_min?: number | null;
+  rem_min?: number | null; awake_min?: number | null; snoring_min?: number | null; spo2_avg?: number | null; spo2_min?: number | null;
+  sessions?: number; physical_recovery?: number | null; mental_recovery?: number | null;
+}
+
+export interface HealthDaily extends Owned {
+  date: string; resting_hr: number | null; avg_hr: number | null; min_hr: number | null; max_hr: number | null; hr_samples: number | null;
+  stress_avg: number | null; stress_min: number | null; stress_max: number | null; stress_samples: number | null;
+  spo2_avg: number | null; spo2_min: number | null; floors: number | null; source: string;
 }
 
 export interface RecoveryLog extends Owned {
@@ -167,4 +177,4 @@ export type TableName =
   | "profiles" | "goals" | "exercises" | "workout_plans" | "plan_exercises" | "workouts" | "workout_sets" | "foods"
   | "food_favorites" | "recipes" | "recipe_ingredients" | "meals" | "nutrition_logs" | "meal_plan_entries"
   | "hydration_logs" | "activity_logs" | "sleep_logs" | "recovery_logs" | "habits" | "habit_logs" | "calendar_events"
-  | "body_measurements" | "progress_photos" | "reminders" | "transformation_programs" | "ai_messages";
+  | "body_measurements" | "progress_photos" | "reminders" | "transformation_programs" | "ai_messages" | "health_daily";

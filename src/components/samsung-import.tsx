@@ -32,7 +32,7 @@ async function readFiles(list: FileList) {
 function inRange(d: SamsungData, days: number | null): SamsungData {
   if (!days) return d;
   const from = addDays(dateKey(), -(days - 1));
-  return { ...d, steps: d.steps.filter((x) => x.date >= from), exercises: d.exercises.filter((x) => x.date >= from), sleep: d.sleep.filter((x) => x.date >= from), weight: d.weight.filter((x) => x.date >= from), water: d.water.filter((x) => x.date >= from) };
+  return { ...d, steps: d.steps.filter((x) => x.date >= from), exercises: d.exercises.filter((x) => x.date >= from), sleep: d.sleep.filter((x) => x.date >= from), weight: d.weight.filter((x) => x.date >= from), water: d.water.filter((x) => x.date >= from), vitals: d.vitals.filter((x) => x.date >= from) };
 }
 
 export function SamsungImportCard({ compact }: { compact?: boolean }) {
@@ -91,11 +91,11 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
 
       // Workouts — replaced the same way.
       for (const c of chunk(dates(data.exercises))) await run(supabase.from("activity_logs").delete().eq("source", "samsung_workout").in("date", c));
-      for (const c of chunk(data.exercises.map((e) => ({ user_id, date: e.date, type: e.type, steps: 0, distance_km: e.distance_km, duration_min: e.duration_min, active_calories: e.calories, source: "samsung_workout", notes: e.label, logged_at: e.start }))))
+      for (const c of chunk(data.exercises.map((e) => ({ user_id, date: e.date, type: e.type, steps: 0, distance_km: e.distance_km, duration_min: e.duration_min, active_calories: e.calories, source: "samsung_workout", notes: e.label, logged_at: e.start, avg_hr: e.avg_hr, max_hr: e.max_hr }))))
         await run(supabase.from("activity_logs").insert(c));
 
       // Sleep & weight — only fill days you haven't logged yet (never overwrite your own entries).
-      let sleepAdded = 0, weightAdded = 0, waterAdded = 0;
+      let sleepAdded = 0, weightAdded = 0, waterAdded = 0, vitalsAdded = 0;
       // Water — skip glasses already imported (matched by timestamp to the second).
       if (data.water.length) {
         const { data: ex, error } = await supabase.from("hydration_logs").select("logged_at").gte("date", data.water[0].date);
@@ -105,13 +105,25 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
         for (const c of chunk(rows)) await run(supabase.from("hydration_logs").insert(c));
         waterAdded = rows.length;
       }
+      // Sleep — watch nights replace earlier Samsung imports; nights you logged by hand are kept.
       if (data.sleep.length) {
+        for (const c of chunk(dates(data.sleep))) await run(supabase.from("sleep_logs").delete().eq("source", "samsung").in("date", c));
         const { data: ex, error } = await supabase.from("sleep_logs").select("date").gte("date", data.sleep[0].date);
         if (error) throw error;
         const have = new Set((ex || []).map((r) => r.date));
-        const rows = data.sleep.filter((s) => !have.has(s.date)).map((s) => ({ user_id, ...s, notes: "Samsung Health" }));
+        const rows = data.sleep.filter((s) => !have.has(s.date)).map((s) => ({ user_id, ...s, source: "samsung", notes: "Samsung Health" }));
         for (const c of chunk(rows)) await run(supabase.from("sleep_logs").insert(c));
         sleepAdded = rows.length;
+      }
+      // Daily vitals — one row per day, updated in place on re-import.
+      if (data.vitals.length) {
+        for (const c of chunk(data.vitals.map((v) => ({ user_id, ...v, source: "samsung" }))))
+          await run(supabase.from("health_daily").upsert(c, { onConflict: "user_id,date" }));
+        vitalsAdded = data.vitals.length;
+      }
+      if (parsed?.heightCm) {
+        const { data: pr } = await supabase.from("profiles").select("height_cm").eq("id", user_id).single();
+        if (!pr?.height_cm) await run(supabase.from("profiles").update({ height_cm: parsed.heightCm }).eq("id", user_id));
       }
       if (data.weight.length) {
         const { data: ex, error } = await supabase.from("body_measurements").select("date").gte("date", data.weight[0].date);
@@ -124,7 +136,7 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
         if (latest.date >= addDays(dateKey(), -7)) await run(supabase.from("profiles").update({ weight_kg: latest.weight_kg }).eq("id", user_id));
       }
       queryClient.invalidateQueries(); // refresh in the background
-      const msg = `Imported ${data.steps.length} days of steps & calories, ${data.exercises.length} workouts, ${waterAdded} water entries, ${sleepAdded} nights of sleep and ${weightAdded} weigh-ins.`;
+      const msg = `Imported ${data.steps.length} days of steps & calories, ${data.exercises.length} workouts, ${sleepAdded} nights of sleep, ${vitalsAdded} days of heart rate / stress / SpO₂ / floors, ${waterAdded} water entries and ${weightAdded} weigh-ins.`;
       setResult(msg); toast("Samsung Health data imported");
     } catch (e) { toast(`Import failed: ${(e as Error).message}`, { tone: "bad" }); }
     setBusy(null);
@@ -154,10 +166,11 @@ export function SamsungImportSheet({ open, onClose }: { open: boolean; onClose: 
                 <Metric label="Workouts" value={data.exercises.length} sub={data.exercises.length ? [...new Set(data.exercises.map((e) => e.label))].slice(0, 3).join(", ") : "none found"} />
                 <Metric label="Water entries" value={data.water.length} sub={data.water.length ? `${data.water.reduce((a, w) => a + w.amount_ml, 0) / 1000} L total` : "none found"} />
                 <Metric label="Active calories" value={data.steps.reduce((a, x) => a + x.calories, 0).toLocaleString()} unit="kcal" sub={data.steps.some((x) => x.resting_calories) ? "+ resting (BMR) per day" : undefined} />
-                <Metric label="Nights of sleep" value={data.sleep.length} />
-                <Metric label="Weigh-ins" value={data.weight.length} />
+                <Metric label="Nights of sleep" value={data.sleep.length} sub={data.sleep.length ? `${data.sleep.filter((s) => s.deep_min != null).length} with stages · ${data.sleep.filter((s) => s.snoring_min).length} snoring` : undefined} />
+                <Metric label="Vitals days" value={data.vitals.length} sub={data.vitals.length ? `HR ${data.vitals.filter((v) => v.hr_samples).length} · stress ${data.vitals.filter((v) => v.stress_samples).length} · SpO₂ ${data.vitals.filter((v) => v.spo2_avg != null).length}` : "heart rate, stress, SpO₂, floors"} />
+                <Metric label="Weigh-ins" value={data.weight.length} sub={parsed!.heightCm ? `height ${parsed!.heightCm} cm` : undefined} />
               </div>
-              {!data.sleep.length && <p className="rounded-xl bg-warm-soft px-3 py-2 text-xs text-warm">No sleep sessions found. Sleep is in the file named <b>com.samsung.shealth.sleep.….csv</b> (not <i>sleep_raw_data</i>, <i>sleep_stage</i> or <i>sleep_combined</i>). Select it too to import sleep.</p>}
+              {!data.sleep.length && <p className="rounded-xl bg-warm-soft px-3 py-2 text-xs text-warm">No sleep sessions found. Sleep is in the file named <b>com.samsung.shealth.sleep.….csv</b> (stages come from <b>com.samsung.health.sleep_stage</b>) (not <i>sleep_raw_data</i>, <i>sleep_stage</i> or <i>sleep_combined</i>). Select it too to import sleep.</p>}
               {parsed!.skipped.length > 0 && <details className="text-xs text-faint"><summary className="cursor-pointer">{parsed!.skipped.length} file{parsed!.skipped.length > 1 ? "s" : ""} not used</summary><p className="mt-1 break-all">{parsed!.skipped.join(", ")}</p></details>}
               <p className="text-xs text-faint">Read {parsed!.files.length} file{parsed!.files.length > 1 ? "s" : ""}. Daily walking distance comes from your step totals, so workouts aren&apos;t counted twice. Sleep and weight only fill days you haven&apos;t logged yourself.</p>
             </>

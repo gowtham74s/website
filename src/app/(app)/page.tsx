@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { activeCalories, addDays, expandEvents, findConflicts, habitScheduled, habitStreaks, planForDay, programDay, readiness, remaining, sleepConsistency, totalSteps, walkDistance, objectivesMet } from "@/lib/calc";
 import { useRows } from "@/lib/data";
-import { dayData, today, useActiveProgram, useEvents, useProfile, useRange, useScores } from "@/lib/hooks";
+import { dayData, today, useActiveProgram, useEvents, useProfile, useRange, useScores, useVitals } from "@/lib/hooks";
 import type { PlanExercise, RecoveryLog } from "@/lib/types";
 import { fmtMin, vol } from "@/lib/units";
 import { startWorkout } from "@/lib/workout";
@@ -30,6 +30,8 @@ export default function Dashboard() {
   const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
   const events = useEvents(todayStart.toISOString(), todayEnd.toISOString());
   const recovery = useRows<RecoveryLog>({ table: "recovery_logs", filters: [["date", "eq", t]] });
+  const vitals = useVitals(addDays(t, -2), t);
+  const vit = [...vitals.rows].reverse().find((v) => v.resting_hr != null || v.stress_avg != null);
   const plan = planForDay(data.plans, t);
   const planEx = useRows<PlanExercise>({ table: "plan_exercises", filters: [["plan_id", "eq", plan?.id ?? "-"]] }, !!plan);
 
@@ -189,7 +191,7 @@ export default function Dashboard() {
               <>
                 <div className="flex items-baseline gap-1.5"><span className="num font-display text-4xl font-semibold">{fmtMin(lastSleep.duration_min)}</span><span className="text-sm text-faint">target {tg.sleepH}h</span></div>
                 <div className="mt-4 grid grid-cols-3 gap-3">
-                  <Metric label="Quality" value={lastSleep.quality ? `${lastSleep.quality}/5` : "—"} />
+                  <Metric label={lastSleep.score != null ? "Sleep score" : "Quality"} value={lastSleep.score != null ? lastSleep.score : lastSleep.quality ? `${lastSleep.quality}/5` : "—"} />
                   <Metric label="vs target" value={`${sleepH! >= tg.sleepH ? "+" : ""}${(sleepH! - tg.sleepH).toFixed(1)}`} unit="h" tone={sleepH! >= tg.sleepH - 0.25 ? "good" : "warm"} />
                   <Metric label="Consistency" value={sleepConsistency(data.sleep.slice(-7)) ?? "—"} unit={data.sleep.length > 1 ? "/100" : ""} />
                 </div>
@@ -215,6 +217,7 @@ export default function Dashboard() {
                 </div>
               </>
             ) : <p className="py-2 text-sm text-muted">A 30-second check-in tells you whether to train normally, lighter, or recover today.</p>}
+            {vit && <Link href="/vitals" className="mt-3 flex items-center justify-between rounded-xl bg-bg-2 px-3 py-2 text-xs text-muted"><span>Watch · {vit.date === t ? "today" : new Date(`${vit.date}T12:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</span><span className="num">{vit.resting_hr != null && <>♥ resting <b className="text-fg">{vit.resting_hr}</b> bpm</>}{vit.stress_avg != null && <> · stress <b className="text-fg">{vit.stress_avg}</b></>}</span></Link>}
             <Button className="mt-4 w-full" onClick={() => setSheet("checkin")} icon={<Activity className="size-4" />}>{ready ? "Update check-in" : "Daily check-in"}</Button>
           </div>
         </Card>

@@ -4,6 +4,7 @@ import { useSession } from "./auth";
 import { updateById, useRows } from "./data";
 import { addDays, dateKey, dayScore, isTrainingDay, type DayData } from "./calc";
 import type {
+  HealthDaily,
   ActivityLog, BodyMeasurement, CalendarEvent, Habit, HabitLog, HydrationLog, NutritionLog, Profile, Program,
   RecoveryLog, SleepLog, Workout, WorkoutPlan,
 } from "./types";
@@ -89,4 +90,8 @@ export function useEvents(fromISO: string, toISO: string) {
   // recurring events may start before the window, so fetch everything that starts before the window end
   const q = useRows<CalendarEvent>({ table: "calendar_events", filters: [["start_at", "lte", toISO]], order: [["start_at", true]] });
   return { ...q, rows: q.rows.filter((e) => e.recurrence !== "none" || e.end_at >= fromISO) };
+}
+
+export function useVitals(from: string, to: string) {
+  return useRows<HealthDaily>({ table: "health_daily", filters: [["date", "gte", from], ["date", "lte", to]], order: [["date", true]] });
 }

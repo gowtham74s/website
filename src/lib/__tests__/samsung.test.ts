@@ -71,3 +71,28 @@ test("files are recognised by content even when the phone renames them", () => {
   assert.equal(d.files.length, 3);
   assert.deepEqual(d.skipped, []);
 });
+
+test("sleep detail (stages, snoring, SpO2) and daily vitals (HR, stress, floors)", () => {
+  const id = "night-1";
+  const d = parseSamsungExport([
+    { name: "a.csv", text: `com.samsung.shealth.sleep,1,1\nsleep_score,efficiency,physical_recovery,mental_recovery,start_time,end_time,time_offset,datauuid\n66,95.0,40,66,2026-11-22 21:00:00.000,2026-11-23 01:00:00.000,UTC+0530,${id},\n` },
+    { name: "b.csv", text: `com.samsung.health.sleep_stage,1,1\nstart_time,sleep_id,stage,end_time,time_offset\n2026-11-22 21:00:00.000,${id},40002,2026-11-22 22:00:00.000,UTC+0530,\n2026-11-22 22:00:00.000,${id},40003,2026-11-22 22:30:00.000,UTC+0530,\n2026-11-22 22:30:00.000,${id},40004,2026-11-22 23:00:00.000,UTC+0530,\n2026-11-22 23:00:00.000,${id},40001,2026-11-22 23:10:00.000,UTC+0530,\n` },
+    { name: "c.csv", text: "com.samsung.shealth.sleep_snoring,1,1\nduration,start_time,end_time,time_offset\n120000,2026-11-22 22:10:00.000,2026-11-22 22:12:00.000,UTC+0530,\n60000,2026-11-20 10:00:00.000,2026-11-20 10:01:00.000,UTC+0530,\n" },
+    { name: "d.csv", text: "com.samsung.shealth.tracker.oxygen_saturation,1,1\ncom.samsung.health.oxygen_saturation.spo2,com.samsung.health.oxygen_saturation.min,com.samsung.health.oxygen_saturation.start_time,com.samsung.health.oxygen_saturation.time_offset\n96.0,90.0,2026-11-22 23:30:00.000,UTC+0530,\n0.0,0.0,2026-11-22 23:40:00.000,UTC+0530,\n" },
+    { name: "e.csv", text: "com.samsung.shealth.tracker.heart_rate,1,1\ncom.samsung.health.heart_rate.heart_rate,com.samsung.health.heart_rate.start_time,com.samsung.health.heart_rate.time_offset\n" + [50, 55, 60, 70, 80, 90, 100, 110, 120, 140].map((v, i) => `${v},2026-11-23 0${i}:00:00.000,UTC+0530,`).join("\n") + "\n" },
+    { name: "f.csv", text: "com.samsung.shealth.stress,1,1\nscore,start_time,time_offset\n10,2026-11-23 04:00:00.000,UTC+0530,\n30,2026-11-23 05:00:00.000,UTC+0530,\n" },
+    { name: "g.csv", text: "com.samsung.shealth.tracker.floors_day_summary,1,1\nfloor_count,day_time\n7,2026-11-23 00:00:00.000,\n" },
+    { name: "h.csv", text: "com.samsung.health.height,1,1\nheight,start_time\n187.0,2025-06-27 09:37:19.445,\n" },
+  ]);
+  assert.equal(d.heightCm, 187);
+  assert.equal(d.sleep.length, 1);
+  const s = d.sleep[0];
+  assert.equal(s.date, "2026-11-23");
+  assert.deepEqual([s.score, s.efficiency, s.light_min, s.deep_min, s.rem_min, s.awake_min], [66, 95, 60, 30, 30, 10]);
+  assert.equal(s.snoring_min, 2); // only the snore inside the night
+  assert.deepEqual([s.spo2_avg, s.spo2_min], [96, 90]); // 0.0 readings ignored
+  const v = d.vitals.find((x) => x.date === "2026-11-23")!;
+  assert.deepEqual([v.resting_hr, v.min_hr, v.max_hr, v.avg_hr, v.hr_samples], [50, 50, 140, 88, 10]);
+  assert.deepEqual([v.stress_avg, v.stress_min, v.stress_max], [20, 10, 30]);
+  assert.equal(v.floors, 7);
+});

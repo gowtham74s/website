@@ -1,5 +1,5 @@
 "use client";
-import { BarChart3, CalendarDays, CheckCircle2, CloudOff, Dumbbell, Footprints, Home, LineChart, ListChecks, Plus, RefreshCw, Scale as ScaleIcon, Settings, Sparkles, Utensils, X, Droplets, CalendarPlus, Moon } from "lucide-react";
+import { HeartPulse, BarChart3, CalendarDays, CheckCircle2, CloudOff, Dumbbell, Footprints, Home, LineChart, ListChecks, Plus, RefreshCw, Scale as ScaleIcon, Settings, Sparkles, Utensils, X, Droplets, CalendarPlus, Moon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -26,6 +26,7 @@ const MORE = [
   { href: "/hydration", label: "Hydration", icon: Droplets },
   { href: "/activity", label: "Activity", icon: Footprints },
   { href: "/sleep", label: "Sleep & recovery", icon: Moon },
+  { href: "/vitals", label: "Vitals", icon: HeartPulse },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/assistant", label: "AI assistant", icon: Sparkles },
 ];
