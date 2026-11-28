@@ -24,6 +24,12 @@ test("walk distance falls back to steps", () => {
   assert.equal(walkDistance(rows), 4);
 });
 
+test("samsung workouts are not double counted with the daily step total", () => {
+  const rows: any[] = [{ type: "walk", distance_km: 6, steps: 8000, source: "samsung" }, { type: "walk", distance_km: 3, steps: 0, source: "samsung_workout" }];
+  assert.equal(walkDistance(rows), 6);
+  assert.equal(walkDistance([rows[1]]), 3);
+});
+
 test("sleep across midnight", () => {
   assert.equal(sleepMinutes("2026-01-01T23:30:00", "2026-01-02T07:00:00"), 450);
 });

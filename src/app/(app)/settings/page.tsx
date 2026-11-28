@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase";
 import { clearDemoData, suggestTargets } from "@/lib/templates";
 import type { Profile, Reminder, ScoreKey, TableName } from "@/lib/types";
 import { notify } from "@/components/reminders";
+import { SamsungImportCard } from "@/components/samsung-import";
 import { Badge, Button, Card, Chip, Confirm, cx, Field, IconButton, Input, PageHeader, Section, Segmented, Select, Sheet, Stepper, Toggle, useAction, useToast } from "@/components/ui";
 
 const EXPORT_TABLES: TableName[] = ["profiles", "goals", "workout_plans", "plan_exercises", "workouts", "workout_sets", "exercises", "foods", "food_favorites", "recipes", "recipe_ingredients", "meals", "nutrition_logs", "meal_plan_entries", "hydration_logs", "activity_logs", "sleep_logs", "recovery_logs", "habits", "habit_logs", "calendar_events", "body_measurements", "progress_photos", "reminders", "transformation_programs", "ai_messages"];
@@ -128,6 +129,10 @@ export default function SettingsPage() {
       </Section>
 
       <Notifications p={p} set={set} />
+
+      <Section title="Connected devices">
+        <SamsungImportCard />
+      </Section>
 
       <Section title="Calendar integration">
         <Card className="flex items-center gap-3 p-4 sm:p-5"><CalendarDays className="size-5 text-info" /><div className="flex-1 text-sm"><div className="font-medium">Google Calendar</div><div className="text-muted">{gcalAvailable ? "Available — import or send events from Calendar → Sync." : "Not configured on this deployment. iCal import/export works today."}</div></div><Badge tone={gcalAvailable ? "good" : "neutral"}>{gcalAvailable ? "Ready" : "Off"}</Badge></Card>

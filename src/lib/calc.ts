@@ -65,7 +65,10 @@ export const pct = (v: number, t: number) => (t > 0 ? Math.min(100, Math.round((
 export const STEP_KM = 0.000762; // average stride ≈ 0.76 m
 /** Walking distance for the day: logged km, or estimated from steps when only steps were logged. */
 export function walkDistance(rows: ActivityLog[]) {
-  return round1(rows.filter((r) => ["walk", "run", "hike"].includes(r.type))
+  // When a Samsung daily step total exists for the day it already covers that day's walks,
+  // so the individual Samsung workout rows are not added on top.
+  const hasDaily = rows.some((r) => r.source === "samsung");
+  return round1(rows.filter((r) => ["walk", "run", "hike"].includes(r.type) && !(hasDaily && r.source === "samsung_workout"))
     .reduce((a, r) => a + (Number(r.distance_km) > 0 ? Number(r.distance_km) : (r.steps || 0) * STEP_KM), 0) * 10) / 10;
 }
 export const totalSteps = (rows: ActivityLog[]) => rows.reduce((a, r) => a + (r.steps || 0), 0);

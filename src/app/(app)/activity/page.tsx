@@ -9,6 +9,7 @@ import type { ActivityLog } from "@/lib/types";
 import { fmtMin, fmtSec } from "@/lib/units";
 import { BarSeries, ChartFrame } from "@/components/charts";
 import { ActivitySheet } from "@/components/loggers";
+import { SamsungImportCard } from "@/components/samsung-import";
 import { Badge, Bar, Button, Card, IconButton, Metric, PageHeader, Section, Sheet, Stepper, useAction, useToast } from "@/components/ui";
 
 export default function Page() { return <Suspense><ActivityPage /></Suspense>; }
@@ -58,8 +59,9 @@ function ActivityPage() {
           <Button variant="good" size="lg" onClick={() => setWalk(true)} icon={<Play className="size-4" />}>Start walk</Button>
           <Button size="lg" onClick={() => setManual(true)} icon={<Plus className="size-4" />}>Log activity</Button>
         </div>
-        <p className="mt-3 text-xs text-faint">Automatic step sync (Apple Health / Google Fit) needs a native bridge; until then, log manually or track a walk with GPS here.</p>
+        <p className="mt-3 text-xs text-faint">Wearing a Galaxy watch or band? Import your Samsung Health data below. Live automatic sync needs a native Android app.</p>
       </Card>
+      <div className="mb-4"><SamsungImportCard /></div>
       <div className="mb-4 grid gap-3 sm:grid-cols-4">
         <Card className="p-4"><Metric label="This week" value={Math.round(thisWeek.reduce((a, d) => a + d.km, 0) * 10) / 10} unit="km" /></Card>
         <Card className="p-4"><Metric label="Weekly avg (daily)" value={avg(daily.slice(-7).map((d) => d.km))} unit="km" /></Card>
@@ -70,7 +72,7 @@ function ActivityPage() {
         {logs.rows.length ? <Card className="divide-y divide-line">{logs.rows.slice(0, 20).map((l) => (
           <div key={l.id} className="flex items-center gap-3 px-4 py-3">
             <Footprints className="size-4 text-info" />
-            <div className="min-w-0 flex-1"><div className="text-sm font-medium capitalize">{l.type} · {Number(l.distance_km)} km{l.is_demo && <Badge className="ml-2">Demo</Badge>}</div><div className="num text-xs text-faint">{new Date(`${l.date}T12:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })} · {l.duration_min} min{l.steps ? ` · ${l.steps.toLocaleString()} steps` : ""}{l.source === "gps" ? " · GPS" : ""}</div></div>
+            <div className="min-w-0 flex-1"><div className="text-sm font-medium capitalize">{l.source === "samsung" ? "Daily steps" : l.source === "samsung_workout" && l.notes ? l.notes : l.type} · {Number(l.distance_km)} km{l.is_demo && <Badge className="ml-2">Demo</Badge>}</div><div className="num text-xs text-faint">{new Date(`${l.date}T12:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })} · {l.duration_min} min{l.steps ? ` · ${l.steps.toLocaleString()} steps` : ""}{l.source === "gps" ? " · GPS" : l.source?.startsWith("samsung") ? " · Samsung Health" : ""}</div></div>
             <IconButton label="Delete" onClick={() => act(() => deleteById("activity_logs", l.id), "Removed")}><Trash2 className="size-4" /></IconButton>
           </div>
         ))}</Card> : <p className="text-sm text-muted">No activity logged yet.</p>}
